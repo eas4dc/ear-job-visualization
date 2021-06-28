@@ -103,7 +103,7 @@ def main():
     for metric in args.metrics:
         metric_name = metrics.get_metric(metric).name
 
-        m_data = group_by_node[metric_name]
+        m_data = group_by_node[metric_name].interpolate(limit_area='inside')
         m_data_array = m_data.values.transpose()
 
         # Create the resulting figure for current metric
