@@ -111,7 +111,7 @@ Note that if your *input_file* contains resume information of multiple apps, you
 #### Example
 
 The next table shows content of `examples/resume_multiple_apps.csv` file. We will visualize performance savings and penalties of `gromacs_4n_mt` application test with a **JOB-ID** 173277.
-```
+
 |    | JOB-STEP   | USER    | APPLICATION   | POLICY   |   NODES# |   FREQ(GHz) |   TIME(s) |   POWER(Watts) |      GBS |      CPI |   ENERGY(J) |   GFLOPS/WATT | G-POW (T/U)   | G-FREQ   | G-UTIL(G/MEM)   |   AVG IMC | DEF FREQ   |
 |---:|:-----------|:--------|:--------------|:---------|---------:|------------:|----------:|---------------:|---------:|---------:|------------:|--------------:|:--------------|:---------|:----------------|----------:|:-----------|
 |  0 | 173373-14  | xovidal | bqcd_4n       | MT       |        4 |     2.3184  |   138.218 |        264.022 | 10.3858  | 0.699178 |      145971 |      0.336029 | ---           | ---      | ---             |      1.99 | 2.1        |
@@ -141,7 +141,7 @@ The next table shows content of `examples/resume_multiple_apps.csv` file. We wil
 | 24 | 173277-2   | xovidal | gromacs_4n_mt | MO       |        4 |     2.088   |   336.286 |        278.573 |  9.74747 | 0.4831   |      374721 |      1.88377  | ---           | ---      | ---             |      1.97 | 2.1        |
 | 25 | 173277-1   | xovidal | gromacs_4n_mt | MO       |        4 |     2.54108 |   307.198 |        341.611 | 10.7149  | 0.476542 |      419769 |      1.77675  | ---           | ---      | ---             |      2.39 | TURBO      |
 | 26 | 173277-0   | xovidal | gromacs_4n_mt | MO       |        4 |     2.54257 |   309.182 |        341.91  | 10.5852  | 0.511182 |      422851 |      2.16451  | ---           | ---      | ---             |      2.39 | TURBO      |
-```
+
 
 We can type:
 
