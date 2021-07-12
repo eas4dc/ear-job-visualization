@@ -149,4 +149,4 @@ We can type:
 
 Therefore we obtain:
 
-![alt text](resume_mult_apps.png)
+![alt text](examples/resume_mult_apps.png)
