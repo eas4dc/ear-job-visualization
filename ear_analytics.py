@@ -88,9 +88,6 @@ def init_metrics(config):
     return mts
 
 
-metrics = init_metrics(read_ini('config.ini'))
-
-
 def heatmap(n_sampl=32):
     """ Prepare the heatmap colormap, where 'n_sampl'
         defines the number of color samples. """
@@ -165,7 +162,7 @@ def resume(filename, base_freq, app_name=None, title=None):
         plt.show()
 
 
-def recursive(filename, mtrcs, req_metrics):
+def recursive(filename, mtrcs, req_metrics, title=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -195,7 +192,11 @@ def recursive(filename, mtrcs, req_metrics):
 
         # Create the resulting figure for current metric
         fig = plt.figure(figsize=[17.2, 9.6])
-        fig.suptitle(metric_name)
+
+        tit = metric_name
+        if title:
+            tit = f'{title}: {metric_name}'
+        fig.suptitle(tit)
 
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
                            width_ratios=(9.5, 0.5))
@@ -227,7 +228,7 @@ def res_parser_action(args):
 
 def rec_parser_action(args):
     """ Action for `recursive` subcommand """
-    recursive(args.input_file, metrics, args.metrics)
+    recursive(args.input_file, metrics, args.metrics, args.title)
 
 
 def main():
@@ -240,6 +241,20 @@ def main():
                                      ' eacct command.')
     parser.add_argument('input_file', help='Specifies the input file name to'
                         ' read data from.', type=str)
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--save', action='store_true',
+                       help='Activate the flag to store resulting figures'
+                       ' (default).')
+    group.add_argument('--show', action='store_true',
+                       help='Show the resulting figure.')
+
+    parser.add_argument('-o', '--output',
+                        help='Sets the output image name.'
+                        ' Only valid if `--save` flag is set (default).')
+    parser.add_argument('-t', '--title',
+                        help='Set the resulting figure title.')
+
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
                                        description='Type `ear_analytics` '
@@ -269,13 +284,13 @@ def main():
                             ' savings and penalties in the figure.')
     parser_res.add_argument('--app_name', help='Set the application name to'
                             ' get resume info.')
-    parser_res.add_argument('-t', '--title',
-                            help='Set the resulting figure title.')
     parser_res.set_defaults(func=res_parser_action)
 
     args = parser.parse_args()
     args.func(args)
 
+
+metrics = init_metrics(read_ini('config.ini'))
 
 if __name__ == '__main__':
     main()
