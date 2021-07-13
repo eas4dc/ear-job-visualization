@@ -100,7 +100,8 @@ def heatmap(n_sampl=32):
     return ListedColormap(vals)
 
 
-def resume(filename, base_freq, app_name=None, title=None):
+def resume(filename, base_freq, app_name=None,
+           show=False, output=None, title=None):
     """ This function generates a graph of performance metrics given by
     `filename`.
 
@@ -159,10 +160,17 @@ def resume(filename, base_freq, app_name=None, title=None):
         axes.text(rect.get_x() + rect.get_width() / 2,
                   height + 0.1, '{:.2f}'.format(label),
                   ha='center', va='bottom')
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            name = 'resume.jpg'
+            if output is not None:
+                name = output
+            plt.savefig(fname=name, bbox_inches='tight')
 
 
-def recursive(filename, mtrcs, req_metrics, title=None):
+def recursive(filename, mtrcs, req_metrics,
+              show=False, title=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -187,7 +195,8 @@ def recursive(filename, mtrcs, req_metrics, title=None):
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        m_data = group_by_node[metric_name].interpolate(limit_area='inside')
+        m_data = group_by_node[metric_name].interpolate(method='bfill',
+                                                        limit_area='inside')
         m_data_array = m_data.values.transpose()
 
         # Create the resulting figure for current metric
@@ -217,18 +226,24 @@ def recursive(filename, mtrcs, req_metrics, title=None):
         col_bar_ax = fig.add_subplot(grid_sp[:, 1])
         fig.colorbar(cm.ScalarMappable(cmap=heatmap(), norm=norm),
                      cax=col_bar_ax)
-        plt.show()
-        plt.pause(0.001)
+        if show:
+            plt.show()
+            plt.pause(0.001)
+        else:
+            name = f'recursion_{title}_{metric_name}.jpg'
+            plt.savefig(fname=name, bbox_inches='tight')
 
 
 def res_parser_action(args):
     """ Action for `resume` subcommand """
-    resume(args.input_file, args.base_freq, args.app_name, args.title)
+    resume(args.input_file, args.base_freq, args.app_name,
+           args.show, args.output, args.title)
 
 
 def rec_parser_action(args):
     """ Action for `recursive` subcommand """
-    recursive(args.input_file, metrics, args.metrics, args.title)
+    recursive(args.input_file, metrics, args.metrics,
+              args.show, args.title)
 
 
 def main():
@@ -249,11 +264,11 @@ def main():
     group.add_argument('--show', action='store_true',
                        help='Show the resulting figure.')
 
+    parser.add_argument('-t', '--title',
+                        help='Set the resulting figure title.')
     parser.add_argument('-o', '--output',
                         help='Sets the output image name.'
                         ' Only valid if `--save` flag is set (default).')
-    parser.add_argument('-t', '--title',
-                        help='Set the resulting figure title.')
 
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
