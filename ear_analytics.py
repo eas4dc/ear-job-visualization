@@ -2,9 +2,10 @@
     information given by eacct command. """
 
 import argparse
+import configparser
+
 import pandas as pd
 import numpy as np
-
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib import cm
@@ -48,15 +49,37 @@ class Metrics:
         return self.metrics[metric_key]
 
 
-metrics = Metrics()
+def parse_int_tuple(in_str):
+    """
+    Given a tuple of two ints in str type, returns a tuple of two ints.
+    """
+    return tuple(int(k.strip()) for k in in_str[1:-1].split(','))
 
-metrics.add_metric(Metric('cpi', 'CPI', (0.2, 3)))
-metrics.add_metric(Metric('avg_freq', 'AVG.FREQ', (1800000, 3600000)))
-metrics.add_metric(Metric('tpi', 'TPI', (0, 5)))
-metrics.add_metric(Metric('gbs', 'GBS', (0, 300)))
-metrics.add_metric(Metric('dc_node_pwr', 'DC-NODE-POWER', (100, 400)))
-metrics.add_metric(Metric('dram_pwr', 'DRAM-POWER', (5, 50)))
-metrics.add_metric(Metric('pck_pwr', 'PCK-POWER', (100, 400)))
+
+def read_ini(filename):
+    """
+    Load the configuration file `filename`
+    """
+    config = configparser.ConfigParser(converters={'tuple': parse_int_tuple})
+    config.read(filename)
+    return config
+
+
+def init_metrics(config):
+    """
+    Based on configuration stored in `config`,
+    inits the metric types used by this software.
+    """
+    mts = Metrics()
+
+    for metric in config['METRICS']:
+        mts.add_metric(Metric(metric, metric.upper(),
+                       config['METRICS'].gettuple(metric)))
+
+    return mts
+
+
+metrics = init_metrics(read_ini('config.ini'))
 
 
 def heatmap(n_sampl=32):
@@ -91,9 +114,9 @@ def resume(filename, base_freq, app_name=None):
         # TODO: control app_name error
         data_f = data_f[data_f['APPLICATION'] == app_name]
 
-    res_mns = data_f.groupby(['POLICY',
-                              'DEF FREQ'])[['TIME(s)', 'ENERGY(J)',
-                                            'POWER(Watts)', 'CPI']].mean()
+    res_mns = data_f.groupby(['POLICY', 'DEF FREQ'])[['TIME(s)', 'ENERGY(J)',
+                                                      'POWER(Watts)', 'CPI']].\
+        mean()
     res_vs_base = res_mns
     ref = res_mns.loc['MO', base_freq]  # TODO: check base freq error
 
@@ -123,7 +146,7 @@ def resume(filename, base_freq, app_name=None):
         axes.text(rect.get_x() + rect.get_width() / 2,
                   height + 0.1, '{:.2f}'.format(label),
                   ha='center', va='bottom')
-    plt.show()
+        plt.show()
 
 
 def recursive(filename, metrics, req_metrics):
@@ -200,7 +223,7 @@ def main():
                                      'and visualize information files given by'
                                      ' eacct command.')
     parser.add_argument('input_file', help='Specifies the input file name to'
-                                           ' read data from.', type=str)
+                        ' read data from.', type=str)
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
                                        description='Type `ear_analytics` '

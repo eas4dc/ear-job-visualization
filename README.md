@@ -101,6 +101,7 @@ positional arguments:
 optional arguments:
   -h, --help           show this help message and exit
   --app_name APP_NAME  Set the application name to get resume info.
+  -t, --title TITLE    Set the resulting figure title.
 ```
 
 Generate a bar plot that shows Energy and Power savings, and Time penalty of applying different policies to some application with respect to executions applying EAR's MONITORING policy.
@@ -110,7 +111,8 @@ Note that if your *input_file* contains resume information of multiple apps, you
 
 #### Example
 
-The next table shows content of `examples/resume_multiple_apps.csv` file. We will visualize performance savings and penalties of `gromacs_4n_mt` application test with a **JOB-ID** 173277.
+The next table shows content of `examples/resume_multiple_apps.csv` file., which content output information of two applications, `bqcd_4n` and `gromacs_4n_mt`.
+We will visualize performance savings and penalties of `gromacs_4n_mt` application test with a **JOB-ID** 173277.
 
 |    | JOB-STEP   | USER    | APPLICATION   | POLICY   |   NODES# |   FREQ(GHz) |   TIME(s) |   POWER(Watts) |      GBS |      CPI |   ENERGY(J) |   GFLOPS/WATT | G-POW (T/U)   | G-FREQ   | G-UTIL(G/MEM)   |   AVG IMC | DEF FREQ   |
 |---:|:-----------|:--------|:--------------|:---------|---------:|------------:|----------:|---------------:|---------:|---------:|------------:|--------------:|:--------------|:---------|:----------------|----------:|:-----------|
