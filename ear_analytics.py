@@ -33,6 +33,9 @@ class Metric:
         """ Returns the normalization function. """
         return Normalize(vmin=self.range[0], vmax=self.range[1], clip=clip)
 
+    def __str__(self):
+        return f'{self.key}: {self.name} -- {self.range}'
+
 
 class Metrics:
     """ Manage all the metrics that this program can work with. """
@@ -48,19 +51,25 @@ class Metrics:
         """ Returns the metric corresponding to the key passed. """
         return self.metrics[metric_key]
 
+    def __str__(self):
+        res = ''
+        for metric in self.metrics.values():
+            res += (str(metric) + '\n')
+        return res
 
-def parse_int_tuple(in_str):
+
+def parse_float_tuple(in_str):
     """
     Given a tuple of two ints in str type, returns a tuple of two ints.
     """
-    return tuple(int(k.strip()) for k in in_str[1:-1].split(','))
+    return tuple(float(k.strip()) for k in in_str[1:-1].split(','))
 
 
 def read_ini(filename):
     """
     Load the configuration file `filename`
     """
-    config = configparser.ConfigParser(converters={'tuple': parse_int_tuple})
+    config = configparser.ConfigParser(converters={'tuple': parse_float_tuple})
     config.read(filename)
     return config
 
@@ -94,7 +103,7 @@ def heatmap(n_sampl=32):
     return ListedColormap(vals)
 
 
-def resume(filename, base_freq, app_name=None):
+def resume(filename, base_freq, app_name=None, title=None):
     """ This function generates a graph of performance metrics given by
     `filename`.
 
@@ -133,8 +142,15 @@ def resume(filename, base_freq, app_name=None):
 
     results = dropped[['Time penalty (%)', 'Energy save (%)',
                        'Power save (%)']]
+
+    tit = filename[:-4]
+    if title:
+        tit = title
+    elif app_name:
+        tit = app_name
+
     axes = results.plot(kind='bar', ylabel='(%)',
-                        title=filename[:-4], figsize=(12.8, 9.6), rot=45)
+                        title=tit, figsize=(12.8, 9.6), rot=45)
     plt.grid(axis='y', ls='--', alpha=0.5)
 
     labels = np.ma.concatenate([results[serie].values
@@ -149,13 +165,13 @@ def resume(filename, base_freq, app_name=None):
         plt.show()
 
 
-def recursive(filename, metrics, req_metrics):
+def recursive(filename, mtrcs, req_metrics):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
 
     It also receives the `filename` to read data from,
-    and `metrics` supported by ear_analytics.
+    and `mtrcs` supported by ear_analytics.
     """
 
     data_f = pd.read_csv(filename, sep=';')
@@ -172,7 +188,7 @@ def recursive(filename, metrics, req_metrics):
     # Compute the heatmap graph for each metric specified by the input
 
     for metric in req_metrics:
-        metric_name = metrics.get_metric(metric).name
+        metric_name = mtrcs.get_metric(metric).name
 
         m_data = group_by_node[metric_name].interpolate(limit_area='inside')
         m_data_array = m_data.values.transpose()
@@ -184,7 +200,7 @@ def recursive(filename, metrics, req_metrics):
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
                            width_ratios=(9.5, 0.5))
 
-        norm = metrics.get_metric(metric).norm_func()
+        norm = mtrcs.get_metric(metric).norm_func()
 
         for i, _ in enumerate(m_data_array):
             axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
@@ -206,7 +222,7 @@ def recursive(filename, metrics, req_metrics):
 
 def res_parser_action(args):
     """ Action for `resume` subcommand """
-    resume(args.input_file, args.base_freq, args.app_name)
+    resume(args.input_file, args.base_freq, args.app_name, args.title)
 
 
 def rec_parser_action(args):
@@ -253,6 +269,8 @@ def main():
                             ' savings and penalties in the figure.')
     parser_res.add_argument('--app_name', help='Set the application name to'
                             ' get resume info.')
+    parser_res.add_argument('-t', '--title',
+                            help='Set the resulting figure title.')
     parser_res.set_defaults(func=res_parser_action)
 
     args = parser.parse_args()

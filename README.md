@@ -53,6 +53,15 @@ $ source env_name/bin/activate
 (env_name) $ deactivate
 ```
 
+### Configuration
+
+**ear-analytics** works with a configuration file called *config.ini*. You can modify the template given in this repository.
+By now, this configuration file only lets you specify which metrics will be accepted by **ear-analytics** and for which range
+of values will work each one based on the architecture you are working.
+Note that all metrics you specify must be reported before by [eacct](https://gitlab.bsc.es/ear_team/ear/-/wikis/Commands#energy-account-eacct) command, and each metric name must be the same as it is reported by **eacct**.
+
+For more information about why specify metrics configuration, read [recursive](#recursive) sub-command section.
+
 ## Usage
 
 If you are using a [virtual environment](#using-a-virtual-environment) remember to activate it.
@@ -111,7 +120,7 @@ Note that if your *input_file* contains resume information of multiple apps, you
 
 #### Example
 
-The next table shows content of `examples/resume_multiple_apps.csv` file., which content output information of two applications, `bqcd_4n` and `gromacs_4n_mt`.
+The next table shows content of `examples/resume_multiple_apps.csv` file, which content output information of two applications, `bqcd_4n` and `gromacs_4n_mt`.
 We will visualize performance savings and penalties of `gromacs_4n_mt` application test with a **JOB-ID** 173277.
 
 |    | JOB-STEP   | USER    | APPLICATION   | POLICY   |   NODES# |   FREQ(GHz) |   TIME(s) |   POWER(Watts) |      GBS |      CPI |   ENERGY(J) |   GFLOPS/WATT | G-POW (T/U)   | G-FREQ   | G-UTIL(G/MEM)   |   AVG IMC | DEF FREQ   |
@@ -152,3 +161,43 @@ We can type:
 Therefore we obtain:
 
 ![alt text](examples/resume_mult_apps.png)
+
+### recursive
+
+```
+$ python3 ear_analytics.py dumy recursive --help
+
+usage: ear_analytics input_file recursive [-h] -m
+                                          {cpi,avg.freq,tpi,gbs,dc-node-power,dram-power,pck-power}
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -m {cpi,avg.freq,tpi,gbs,dc-node-power,dram-power,pck-power}, --metrics {cpi,avg.freq,tpi,gbs,dc-node-power,dram-power,pck-power}
+                        Specify which metrics you want to visualize.
+
+```
+
+Generate a heatmap-based graph for each metric specified by *--metrics* argument.
+Note that the accepted metrics by your **ear-analytics** installation must be specified in the [configuration](#configuration) file.
+
+The resulting figure (for each *--metric* specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualization about the value of the metric each figure is showing. All nodes visualized share the same timeline, which makes this command useful to check the application behaviour across all of them.
+
+#### Example
+
+The next table shows content of examples/pop_loops.csv file, which content output information of all loops recorded by EAR during the execution of POP application. We will visualize the CPI and GBS metrics reported by EAR for each of the 10 nodes this application was executed.
+
+![alt text](examples/pop_loops_table.png)
+
+To get the wanted results, we type:
+
+`$ python3 ear_analytics.py examples/pop_loops.csv recursive --metrics cpi --metrics gbs`
+
+We get the following images:
+
+![alt text](examples/pop_loops_cpi.png)
+
+![alt text](examples/pop_loops_gbs.png)
+
+## Contact
+
+For any question and suggestion, contact with oriol.vidal@bsc.es.
