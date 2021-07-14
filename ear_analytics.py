@@ -254,6 +254,7 @@ def main():
                                      description='High level support for read '
                                      'and visualize information files given by'
                                      ' eacct command.')
+    parser.add_argument('--version', action='version', version='%(prog)s 1.0')
     parser.add_argument('input_file', help='Specifies the input file name to'
                         ' read data from.', type=str)
 
