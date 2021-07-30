@@ -361,7 +361,10 @@ def recursive_parser_action_closure(metrics):
         recursive(args.input_file, metrics, args.metrics,
                   args.show, args.title)
 
-    return rec_parser_action
+    def print_in_build_proces(args):
+        print("This functionality is still under development.")
+
+    return print_in_build_proces
 
 
 def res_parser_action(args):
@@ -473,7 +476,7 @@ def main():
 
     # Read configuration file and init `metrics` data structure
     metrics = init_metrics(read_ini('config.ini'))
-    print(f'METRICS CONFIG\n{metrics.__str__()}')
+    # print(f'METRICS CONFIG\n{metrics.__str__()}')
 
     # create the top-level parser
     parser = build_parser(metrics)
