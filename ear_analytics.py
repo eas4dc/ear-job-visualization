@@ -1,8 +1,10 @@
 """ High level support for read and visualize
-    information given by eacct command. """
+    information given by EARL. """
 
 import argparse
 import configparser
+import os
+from itertools import dropwhile
 
 import pandas as pd
 import numpy as np
@@ -58,34 +60,205 @@ class Metrics:
         return res
 
 
-def parse_float_tuple(in_str):
+def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
     """
-    Given a tuple of two ints in str type, returns a tuple of two ints.
+    Filters the DataFrame `data_f` by `job_id`
+    and/or `step_id` and/or `app_id`.
     """
-    return tuple(float(k.strip()) for k in in_str[1:-1].split(','))
+
+    def mask(data_f, key, value):
+        if value is not None:
+            return data_f[data_f[key] == value]
+        return data_f
+
+    pd.DataFrame.mask = mask
+
+    return (data_f
+            .mask('APP_ID', app_id)
+            .mask('JOB_ID', job_id)
+            .mask('STEPID', step_id)
+            )
+    """
+    --- LEGACY ---
+    if job_id and step_id:
+        print(f'specified job and step id ({job_id}, {step_id})')
+        result =\
+            data_f[(data_f['JID'] == job_id) & (data_f['STEPID'] == step_id)]
+    elif job_id:
+        print(f'specified job id {job_id}')
+        result =\
+            data_f[(data_f['JID'] == job_id)]
+    elif step_id:
+        print(f'specified step id {step_id}')
+        result =\
+            data_f[(data_f['STEPID'] == step_id)]
+    else:
+        return data_f
+
+    return result
+    """
 
 
-def read_ini(filename):
+def resume(filename, base_freq, app_id=None, job_id=None,
+           show=False, output=None, title=None):
     """
-    Load the configuration file `filename`
-    """
-    config = configparser.ConfigParser(converters={'tuple': parse_float_tuple})
-    config.read(filename)
-    return config
+    This function generates a graph of performance metrics given by `filename`.
+
+    Performance metrics (Energy and Power save, and Time penalty)
+    are ploted as percentage with respect to MONITORING (MO) results with the
+    frequency `base_freq`.
+
+    If the file `filename` contains resume information
+    of multiple applications this function also accepts the parameter
+    `app_name` and/or `job_id` which filters file's data to work only with'
+    ' `app_name` and/or `job_id` application results. """
+
+    def preprocess_df(data_f):
+        """
+        Pre-process DataFrame `data_f` to get workable data.
+        """
+        return (data_f
+                .assign(
+                  def_freq=lambda x: round(data_f['DEF.FREQ'] * 10**-6, 4),
+                  avg_cpu_freq=lambda x:
+                  round(data_f['AVG.CPUFREQ'] * 10**-6, 4),
+                  avg_imc_freq=lambda x:
+                  round(data_f['AVG.IMCFREQ'] * 10**-6, 4),
+                  ENERGY_TAG=lambda x:
+                  data_f['TIME'] * data_f['DC-NODE-POWER'],
+                )
+                .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
+                )
+
+    # Filter rows and pre-process data
+    data_f = preprocess_df(filter_by_job_step_app(read_data(filename),
+                           job_id=job_id, app_id=app_id))
+
+    # Compute average step energy consumed
+    energy_sums = (data_f
+                   .groupby(['POLICY', 'def_freq', 'STEP_ID'])['ENERGY_TAG']
+                   .sum()
+                   )
+
+    # resume data
+    re_dat = (pd
+              .concat([data_f
+                      .groupby(['POLICY', 'def_freq', 'STEP_ID'])
+                      [['TIME', 'DC-NODE-POWER', 'avg_cpu_freq',
+                        'avg_imc_freq']]
+                      .mean(),
+                      energy_sums],
+                      axis=1
+                      )
+              .groupby(['POLICY', 'def_freq'])
+              .mean()
+              )
+
+    # reference data
+    ref_data = re_dat.loc['monitoring', base_freq]
+
+    # Computes savings and penalties
+    re_dat['Time penalty (%)'] = (
+            (re_dat['TIME'] - ref_data['TIME'])
+            / ref_data['TIME']
+            ) * 100
+    re_dat['Energy save (%)'] = (
+            (ref_data['ENERGY_TAG'] - re_dat['ENERGY_TAG'])
+            / ref_data['ENERGY_TAG']
+            ) * 100
+    re_dat['Power save (%)'] = (
+            (ref_data['DC-NODE-POWER'] - re_dat['DC-NODE-POWER'])
+            / ref_data['DC-NODE-POWER']
+            ) * 100
+
+    dropped = re_dat.drop(('monitoring', base_freq))
+
+    results = dropped[['Time penalty (%)', 'Energy save (%)',
+                       'Power save (%)']]
+
+    # Get avg. cpu and imc frequencies
+    freqs = dropped[['avg_cpu_freq', 'avg_imc_freq']]
+
+    # Prepare and create the plot
+    tit = 'resume'
+    if title:
+        tit = title
+    elif app_id:
+        tit = app_id + f'vs. {base_freq} GHz'
+
+    axes = results.plot(kind='bar', ylabel='(%)', title=tit,
+                        figsize=(12.8, 9.6), rot=45, legend=False)
+    ax2 = axes.twinx()
+    freqs.plot(ax=ax2, ylabel='avg. Freq (GHz)', ylim=(0, 3.5),
+               color=['cyan', 'purple'], linestyle='-.', legend=False)
+
+    # create the legend
+    handles_1, labels_1 = axes.get_legend_handles_labels()
+    handles_2, labels_2 = ax2.get_legend_handles_labels()
+
+    axes.legend(handles_1 + handles_2, labels_1 + labels_2, loc=0)
+
+    # Plot a grid
+    plt.grid(axis='y', ls='--', alpha=0.5)
+
+    # Plot value labels above the bars
+    labels = np.ma.concatenate([results[serie].values
+                                for serie in results.columns])
+    rects = axes.patches
+
+    for rect, label in zip(rects, labels):
+        height = rect.get_height()
+        axes.text(rect.get_x() + rect.get_width() / 2,
+                  height + 0.1, '{:.2f}'.format(label),
+                  ha='center', va='bottom')
+    if show:
+        plt.show()
+    else:
+        name = 'resume.jpg'
+        if output is not None:
+            name = output
+        plt.savefig(fname=name, bbox_inches='tight')
 
 
-def init_metrics(config):
+def read_data(file_path, sep=';'):
     """
-    Based on configuration stored in `config`,
-    inits the metric types used by this software.
+    This function reads data properly whether the input `file_path` is a list
+    of concret files, is a directory #,or a list of directories,# and returns a
+    pandas.DataFrame object.
     """
-    mts = Metrics()
 
-    for metric in config['METRICS']:
-        mts.add_metric(Metric(metric, metric.upper(),
-                       config['METRICS'].gettuple(metric)))
+    def load_files(filenames, base_path=None, sep=sep):
+        for filename in filenames:
+            if base_path:
+                path_file = base_path + '/' + filename
+            else:
+                path_file = filename
+            yield pd.read_csv(path_file, sep=sep)
 
-    return mts
+    if isinstance(file_path, str):
+        # `file_path` is only a string containing some file or a directory
+        if os.path.isfile(file_path):
+            print(f'reading file {file_path}')
+            data_f = pd.concat(load_files([file_path]), ignore_index=True)
+        elif os.path.isdir(file_path):
+            print(f'reading files contained in directory {file_path}')
+            print(f'{os.listdir(file_path)}')
+            data_f = pd.concat(load_files(os.listdir(file_path),
+                               base_path=file_path),
+                               ignore_index=True)
+        else:
+            print(f'{file_path} does not exist!')
+            raise FileNotFoundError
+    elif isinstance(file_path, list):
+        # `file_path` is a list containing files
+        try:
+            no_exists_file = next(dropwhile(os.path.exists, file_path))
+            print(f'file {no_exists_file} does not exist!')
+            raise FileNotFoundError
+        except StopIteration:
+            print(f'reading files {file_path}')
+            data_f = pd.concat(load_files(file_path), ignore_index=True)
+    return data_f
 
 
 def heatmap(n_sampl=32):
@@ -100,77 +273,8 @@ def heatmap(n_sampl=32):
     return ListedColormap(vals)
 
 
-def resume(filename, base_freq, app_name=None,
-           show=False, output=None, title=None):
-    """ This function generates a graph of performance metrics given by
-    `filename`.
-
-    Performance metrics (Energy and Power save, and Time penalty)
-    are ploted as percentage with respect to MONITORING (MO) results with the
-    frequency `base_freq`.
-
-    If the file `filename` contains resume information
-    of multiple applications this function also accepts the parameter
-    `app_name` which filters file's data to work only with `app_name`
-    application results. """
-
-    # TODO: control read file error
-    data_f = pd.read_csv(filename)
-
-    if app_name:
-        # TODO: control app_name error
-        data_f = data_f[data_f['APPLICATION'] == app_name]
-
-    res_mns = data_f.groupby(['POLICY', 'DEF FREQ'])[['TIME(s)', 'ENERGY(J)',
-                                                      'POWER(Watts)', 'CPI']].\
-        mean()
-    res_vs_base = res_mns
-    ref = res_mns.loc['MO', base_freq]  # TODO: check base freq error
-
-    res_vs_base['Time penalty (%)'] = ((res_vs_base['TIME(s)'] -
-                                        ref['TIME(s)']) / ref['TIME(s)']) * 100
-    res_vs_base['Energy save (%)'] = ((ref['ENERGY(J)'] -
-                                       res_vs_base['ENERGY(J)']) /
-                                      ref['ENERGY(J)']) * 100
-    res_vs_base['Power save (%)'] = ((ref['POWER(Watts)'] -
-                                      res_vs_base['POWER(Watts)']) /
-                                     ref['POWER(Watts)']) * 100
-
-    dropped = res_vs_base.drop(('MO', base_freq))
-
-    results = dropped[['Time penalty (%)', 'Energy save (%)',
-                       'Power save (%)']]
-
-    tit = filename[:-4]
-    if title:
-        tit = title
-    elif app_name:
-        tit = app_name
-
-    axes = results.plot(kind='bar', ylabel='(%)',
-                        title=tit, figsize=(12.8, 9.6), rot=45)
-    plt.grid(axis='y', ls='--', alpha=0.5)
-
-    labels = np.ma.concatenate([results[serie].values
-                                for serie in results.columns])
-    rects = axes.patches
-
-    for rect, label in zip(rects, labels):
-        height = rect.get_height()
-        axes.text(rect.get_x() + rect.get_width() / 2,
-                  height + 0.1, '{:.2f}'.format(label),
-                  ha='center', va='bottom')
-        if show:
-            plt.show()
-        else:
-            name = 'resume.jpg'
-            if output is not None:
-                name = output
-            plt.savefig(fname=name, bbox_inches='tight')
-
-
 def recursive(filename, mtrcs, req_metrics,
-              show=False, title=None):
+              show=False, title=None, job_id=None, step_id=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -179,14 +283,11 @@ def recursive(filename, mtrcs, req_metrics,
     and `mtrcs` supported by ear_analytics.
     """
 
-    data_f = pd.read_csv(filename, sep=';')
-    group_by_node = data_f\
-        .groupby(['NODENAME', 'ITERATIONS']).agg(lambda x: x).unstack(level=0)
+    data_f = filter_by_job_step(read_data(filename))
 
     # Prepare x-axe range for iterations captured
-
-    x_vals = group_by_node.index.values
-    x_sampl = np.linspace(min(x_vals), max(x_vals), dtype=int)
+    x_sampl = np.linspace(min(data_f.index.values),
+                          max(data_f.index.values), dtype=int)
     extent = [x_sampl[0]-(x_sampl[1]-x_sampl[0])//2,
               x_sampl[-1]+(x_sampl[1]-x_sampl[0])//2, 0, 1]
 
@@ -195,15 +296,30 @@ def recursive(filename, mtrcs, req_metrics,
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        m_data = group_by_node[metric_name].interpolate(method='bfill',
-                                                        limit_area='inside')
-        m_data_array = m_data.values.transpose()
+        # m_data = group_by_node[metric_name].interpolate(method='bfill',
+        # limit_area='inside')
+        m_data = data_f[metric_name]  # .interpolate(method='bfill',
+        # limit_area='inside')
+
+        for key in x_sampl:
+            if key not in m_data.index:
+                m_data = m_data.append(pd.Series(name=key, dtype=object),
+                                       verify_integrity=True)
+                m_data.sort_index(inplace=True)
+
+        m_data.interpolate(method='bfill', limit_area='inside')
+        for idx in m_data.index.values:
+            if idx not in x_sampl:
+                m_data.drop(idx, inplace=True)
+
+        m_data_array = m_data.values.transpose()  # \
+        # .interpolate(method='bfill', limit_area='inside')\
 
         # Create the resulting figure for current metric
         fig = plt.figure(figsize=[17.2, 9.6])
 
         tit = metric_name
-        if title:
+        if title is not None:
             tit = f'{title}: {metric_name}'
         fig.suptitle(tit)
 
@@ -234,29 +350,39 @@ def recursive(filename, mtrcs, req_metrics,
             plt.savefig(fname=name, bbox_inches='tight')
 
 
+def recursive_parser_action_closure(metrics):
+    """
+    Closure function used to return the action
+    function when `recursive` sub-command is called.
+    """
+
+    def rec_parser_action(args):
+        """ Action for `recursive` subcommand """
+        recursive(args.input_file, metrics, args.metrics,
+                  args.show, args.title)
+
+    return rec_parser_action
+
+
 def res_parser_action(args):
     """ Action for `resume` subcommand """
+    print(args)
     resume(args.input_file, args.base_freq, args.app_name,
-           args.show, args.output, args.title)
+           args.jobid, args.show, args.output, args.title)
 
 
-def rec_parser_action(args):
-    """ Action for `recursive` subcommand """
-    recursive(args.input_file, metrics, args.metrics,
-              args.show, args.title)
-
-
-def main():
-    """ Entry method. """
-
-    # create the top-level parser
+def build_parser(metrics):
+    """
+    Given the used `metrics`,
+    returns a parser to read and check command line arguments.
+    """
     parser = argparse.ArgumentParser(prog='ear_analytics',
                                      description='High level support for read '
                                      'and visualize information files given by'
-                                     ' eacct command.')
+                                     ' EARL.')
     parser.add_argument('--version', action='version', version='%(prog)s 1.0')
-    parser.add_argument('input_file', help='Specifies the input file name to'
-                        ' read data from.', type=str)
+    parser.add_argument('input_file', help='Specifies the input file(s) name(s'
+                        ') to read data from.')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--save', action='store_true',
@@ -269,13 +395,13 @@ def main():
                         help='Set the resulting figure title.')
     parser.add_argument('-o', '--output',
                         help='Sets the output image name.'
-                        ' Only valid if `--save` flag is set (default).')
+                        ' Only valid if `--save` flag is set.')
 
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
-                                       description='Type `ear_analytics` '
+                                       description='Type `ear_analytics '
                                        '<dummy_filename> {recursive,resume} -h'
-                                       ' to get more info of each subcommand')
+                                       '` to get more info of each subcommand')
 
     # create the parser for the `recursive` command
     parser_rec = subparsers.add_parser('recursive',
@@ -283,11 +409,14 @@ def main():
                                        ' the behaviour of some metrics monitor'
                                        'ed with EARL. The file must be outpute'
                                        'd by `eacct -r` command.')
-    parser_rec.add_argument('-m', '--metrics', action='append',
+    parser_rec.add_argument('-s', '--stepid', type=int,
+                            help='Sets the STEP ID of the job you are working'
+                            ' with.')
+    parser_rec.add_argument('-m', '--metrics', nargs='+',
                             choices=list(metrics.metrics.keys()),
                             required=True, help='Specify which metrics you wan'
                             't to visualize.')
-    parser_rec.set_defaults(func=rec_parser_action)
+    parser_rec.set_defaults(func=recursive_parser_action_closure(metrics))
 
     # create the parser for the `resume` command
     parser_res = subparsers.add_parser('resume',
@@ -297,16 +426,73 @@ def main():
     parser_res.add_argument('base_freq', help='Specify which'
                             ' frequency is used as base '
                             'reference for computing and showing'
-                            ' savings and penalties in the figure.')
+                            ' savings and penalties in the figure.',
+                            type=float)
     parser_res.add_argument('--app_name', help='Set the application name to'
                             ' get resume info.')
+    parser_res.add_argument('-j', '--jobid', type=int,
+                            help='Sets the JOB ID you are working'
+                            ' with.')
     parser_res.set_defaults(func=res_parser_action)
 
+    return parser
+
+
+def read_ini(filename):
+    """
+    Load the configuration file `filename`
+    """
+
+    def parse_float_tuple(in_str):
+        """
+        Given a tuple of two ints in str type, returns a tuple of two ints.
+        """
+        return tuple(float(k.strip()) for k in in_str[1:-1].split(','))
+
+    config = configparser.ConfigParser(converters={'tuple': parse_float_tuple})
+    config.read(filename)
+    return config
+
+
+def init_metrics(config):
+    """
+    Based on configuration stored in `config`,
+    inits the metric types used by this software.
+    """
+    mts = Metrics()
+
+    for metric in config['METRICS']:
+        mts.add_metric(Metric(metric, metric.upper(),
+                       config['METRICS'].gettuple(metric)))
+
+    return mts
+
+
+def main():
+    """ Entry method. """
+
+    # Read configuration file and init `metrics` data structure
+    metrics = init_metrics(read_ini('config.ini'))
+    print(f'METRICS CONFIG\n{metrics.__str__()}')
+
+    # create the top-level parser
+    parser = build_parser(metrics)
+
     args = parser.parse_args()
+
+    """
+    if args.log:
+        log_lvl = getattr(logging, args.log.upper(), None)
+        if not isinstance(log_lvl, int):
+            logging.warning(f'Invalid log level: {args.log}'
+                            '\nSetting log level to default...')
+            log_lvl = getattr(logging, 'INFO', None)
+    else:
+        log_lvl = getattr(logging, 'INFO', None)
+    """
+
     args.func(args)
 
-
-metrics = init_metrics(read_ini('config.ini'))
 
 if __name__ == '__main__':
     main()
