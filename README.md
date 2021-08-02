@@ -136,7 +136,7 @@ Files included in `examples/bqcd/` directory content output information of a job
 
 We can type:
 
-`$ python3 ear_analytics.py examples/bqcd resume 2.4`
+`$ python3 ear_analytics.py -t "hello world" examples/bqcd resume 2.4`
 
 Therefore we obtain:
 
