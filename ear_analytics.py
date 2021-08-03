@@ -165,7 +165,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
     if title:
         tit = title
     elif app_id:
-        tit = app_id + f'vs. {base_freq} GHz'
+        tit = app_id + f' vs. {base_freq} GHz'
 
     axes = results.plot(kind='bar', ylabel='(%)', title=tit,
                         figsize=(12.8, 9.6), rot=45, legend=False)
