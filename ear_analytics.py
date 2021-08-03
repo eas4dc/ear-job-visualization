@@ -78,25 +78,6 @@ def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
             .mask('JOB_ID', job_id)
             .mask('STEPID', step_id)
             )
-    """
-    --- LEGACY ---
-    if job_id and step_id:
-        print(f'specified job and step id ({job_id}, {step_id})')
-        result =\
-            data_f[(data_f['JID'] == job_id) & (data_f['STEPID'] == step_id)]
-    elif job_id:
-        print(f'specified job id {job_id}')
-        result =\
-            data_f[(data_f['JID'] == job_id)]
-    elif step_id:
-        print(f'specified step id {step_id}')
-        result =\
-            data_f[(data_f['STEPID'] == step_id)]
-    else:
-        return data_f
-
-    return result
-    """
 
 
 def resume(filename, base_freq, app_id=None, job_id=None,
@@ -282,8 +263,24 @@ def recursive(filename, mtrcs, req_metrics,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
+    def preprocess_df(data_f):
+        """
+        Pre-process DataFrame `data_f` to get workable data.
+        """
+        return (data_f
+                .assign(
+                  GPOWER=lambda x: round(data_f['GPOWER'] * 10**-6, 4),
+                  avg_cpu_freq=lambda x:
+                  round(data_f['AVG.CPUFREQ'] * 10**-6, 4),
+                  avg_imc_freq=lambda x:
+                  round(data_f['AVG.IMCFREQ'] * 10**-6, 4),
+                  ENERGY_TAG=lambda x:
+                  data_f['TIME'] * data_f['DC-NODE-POWER'],
+                )
+                .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
+                )
 
-    data_f = filter_by_job_step(read_data(filename))
+    data_f = filter_by_job_step_app(read_data(filename), job_id=job_id, step_id=step_id)
 
     # Prepare x-axe range for iterations captured
     x_sampl = np.linspace(min(data_f.index.values),
@@ -399,6 +396,9 @@ def build_parser(metrics):
     parser.add_argument('-o', '--output',
                         help='Sets the output image name.'
                         ' Only valid if `--save` flag is set.')
+    parser.add_argument('-j', '--jobid', type=int,
+                            help='Sets the JOB ID you are working'
+                            ' with.')
 
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
@@ -433,9 +433,6 @@ def build_parser(metrics):
                             type=float)
     parser_res.add_argument('--app_name', help='Set the application name to'
                             ' get resume info.')
-    parser_res.add_argument('-j', '--jobid', type=int,
-                            help='Sets the JOB ID you are working'
-                            ' with.')
     parser_res.set_defaults(func=res_parser_action)
 
     return parser
