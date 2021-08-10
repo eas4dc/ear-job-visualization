@@ -67,8 +67,10 @@ def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
     """
 
     def mask(data_f, key, value):
-        if value is not None:
-            return data_f[data_f[key] == value]
+        if key in data_f.columns:
+            if value is not None:
+                return data_f[data_f[key] == value]
+        print(f'{key} is not a column name')
         return data_f
 
     pd.DataFrame.mask = mask
@@ -76,6 +78,7 @@ def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
     return (data_f
             .mask('APP_ID', app_id)
             .mask('JOB_ID', job_id)
+            .mask('JID', job_id)
             .mask('STEPID', step_id)
             )
 
@@ -254,7 +257,7 @@ def heatmap(n_sampl=32):
     return ListedColormap(vals)
 
 
-def recursive(filename, mtrcs, req_metrics,
+def runtime(filename, mtrcs, req_metrics,
               show=False, title=None, job_id=None, step_id=None):
     """
     This function generates a heatmap of runtime metrics requested by
@@ -279,12 +282,15 @@ def recursive(filename, mtrcs, req_metrics,
                 )
                 .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
                 )
-
+    print('filtering...')
     data_f = filter_by_job_step_app(read_data(filename), job_id=job_id, step_id=step_id)
+    print(data_f)
+    group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP']).agg(lambda x: x).unstack(level=0)
+    print(group_by_node)
 
     # Prepare x-axe range for iterations captured
-    x_sampl = np.linspace(min(data_f.index.values),
-                          max(data_f.index.values), dtype=int)
+    x_sampl = np.linspace(min(group_by_node.index.values),
+                          max(group_by_node.index.values), dtype=int)
     extent = [x_sampl[0]-(x_sampl[1]-x_sampl[0])//2,
               x_sampl[-1]+(x_sampl[1]-x_sampl[0])//2, 0, 1]
 
@@ -295,7 +301,8 @@ def recursive(filename, mtrcs, req_metrics,
 
         # m_data = group_by_node[metric_name].interpolate(method='bfill',
         # limit_area='inside')
-        m_data = data_f[metric_name]  # .interpolate(method='bfill',
+        m_data = group_by_node[metric_name]  # .interpolate(method='bfill',
+        print(m_data)
         # limit_area='inside')
 
         for key in x_sampl:
@@ -304,7 +311,7 @@ def recursive(filename, mtrcs, req_metrics,
                                        verify_integrity=True)
                 m_data.sort_index(inplace=True)
 
-        m_data.interpolate(method='bfill', limit_area='inside')
+        m_data = m_data.interpolate(method='bfill', limit_area='inside')
         for idx in m_data.index.values:
             if idx not in x_sampl:
                 m_data.drop(idx, inplace=True)
@@ -313,7 +320,7 @@ def recursive(filename, mtrcs, req_metrics,
         # .interpolate(method='bfill', limit_area='inside')\
 
         # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[17.2, 9.6])
+        fig = plt.figure(figsize=[20.4, 1.25 * len(m_data.columns) * 2])
 
         tit = metric_name
         if title is not None:
@@ -343,25 +350,28 @@ def recursive(filename, mtrcs, req_metrics,
             plt.show()
             plt.pause(0.001)
         else:
-            name = f'recursion_{title}_{metric_name}.jpg'
+            name = f'runtime_{title}_{metric_name}.jpg'
             plt.savefig(fname=name, bbox_inches='tight')
 
 
-def recursive_parser_action_closure(metrics):
+def runtime_parser_action_closure(metrics):
     """
     Closure function used to return the action
     function when `recursive` sub-command is called.
     """
 
-    def rec_parser_action(args):
+    def run_parser_action(args):
         """ Action for `recursive` subcommand """
-        recursive(args.input_file, metrics, args.metrics,
-                  args.show, args.title)
+        print(args)
+        runtime(args.input_file, metrics, args.metrics,
+                  args.show, args.title, args.jobid, args.stepid)
 
+    """
     def print_in_build_proces(args):
         print("This functionality is still under development.")
+    """
 
-    return print_in_build_proces
+    return run_parser_action
 
 
 def res_parser_action(args):
@@ -403,23 +413,23 @@ def build_parser(metrics):
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
                                        description='Type `ear_analytics '
-                                       '<dummy_filename> {recursive,resume} -h'
+                                       '<dummy_filename> {runtime,resume} -h'
                                        '` to get more info of each subcommand')
 
     # create the parser for the `recursive` command
-    parser_rec = subparsers.add_parser('recursive',
+    parser_run = subparsers.add_parser('runtime',
                                        help='Generate a heatmap graph showing'
                                        ' the behaviour of some metrics monitor'
                                        'ed with EARL. The file must be outpute'
                                        'd by `eacct -r` command.')
-    parser_rec.add_argument('-s', '--stepid', type=int,
+    parser_run.add_argument('-s', '--stepid', type=int,
                             help='Sets the STEP ID of the job you are working'
                             ' with.')
-    parser_rec.add_argument('-m', '--metrics', nargs='+',
+    parser_run.add_argument('-m', '--metrics', nargs='+',
                             choices=list(metrics.metrics.keys()),
                             required=True, help='Specify which metrics you wan'
                             't to visualize.')
-    parser_rec.set_defaults(func=recursive_parser_action_closure(metrics))
+    parser_run.set_defaults(func=runtime_parser_action_closure(metrics))
 
     # create the parser for the `resume` command
     parser_res = subparsers.add_parser('resume',
