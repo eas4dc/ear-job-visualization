@@ -70,7 +70,7 @@ def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
         if key in data_f.columns:
             if value is not None:
                 return data_f[data_f[key] == value]
-        print(f'{key} is not a column name')
+        # print(f'{key} is not a column name')
         return data_f
 
     pd.DataFrame.mask = mask
@@ -282,11 +282,11 @@ def runtime(filename, mtrcs, req_metrics,
                 )
                 .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
                 )
-    print('filtering...')
+    # print('filtering...')
     data_f = filter_by_job_step_app(read_data(filename), job_id=job_id, step_id=step_id)
-    print(data_f)
+    # print(data_f)
     group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP']).agg(lambda x: x).unstack(level=0)
-    print(group_by_node)
+    # print(group_by_node)
 
     # Prepare x-axe range for iterations captured
     x_sampl = np.linspace(min(group_by_node.index.values),
@@ -302,7 +302,7 @@ def runtime(filename, mtrcs, req_metrics,
         # m_data = group_by_node[metric_name].interpolate(method='bfill',
         # limit_area='inside')
         m_data = group_by_node[metric_name]  # .interpolate(method='bfill',
-        print(m_data)
+        # print(m_data)
         # limit_area='inside')
 
         for key in x_sampl:
