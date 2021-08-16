@@ -320,12 +320,12 @@ def runtime(filename, mtrcs, req_metrics,
         # .interpolate(method='bfill', limit_area='inside')\
 
         # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[20.4, 1.25 * len(m_data.columns) * 2])
+        fig = plt.figure(figsize=[20.4, 0.5 * len(m_data.columns) * 2])
 
         tit = metric_name
         if title is not None:
             tit = f'{title}: {metric_name}'
-        fig.suptitle(tit)
+        fig.suptitle(tit, size='xx-large', weight='bold')
 
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
                            width_ratios=(9.5, 0.5))
@@ -339,8 +339,10 @@ def runtime(filename, mtrcs, req_metrics,
             axes.imshow(data, cmap=heatmap(), norm=norm,
                         aspect='auto', extent=extent)
             axes.set_xlim(extent[0], extent[1])
-            if i != len(m_data_array) - 1:
-                axes.set_xticklabels([])
+            # Uncomment these lines to show timestamp labels on x axe
+            # if i != len(m_data_array) - 1:
+              #  axes.set_xticklabels([])
+            ax.set_xticks([])
 
         # fig.tight_layout()
         col_bar_ax = fig.add_subplot(grid_sp[:, 1])
@@ -350,7 +352,7 @@ def runtime(filename, mtrcs, req_metrics,
             plt.show()
             plt.pause(0.001)
         else:
-            name = f'runtime_{title}_{metric_name}.jpg'
+            name = f'runtime_{metric_name}.jpg'
             plt.savefig(fname=name, bbox_inches='tight')
 
 
