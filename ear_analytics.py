@@ -344,7 +344,7 @@ def runtime(filename, mtrcs, req_metrics,
             # Uncomment these lines to show timestamp labels on x axe
             # if i != len(m_data_array) - 1:
               #  axes.set_xticklabels([])
-            ax.set_xticks([])
+            axes.set_xticks([])
 
         # fig.tight_layout()
         col_bar_ax = fig.add_subplot(grid_sp[:, 1])
