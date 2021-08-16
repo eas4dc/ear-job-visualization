@@ -170,11 +170,13 @@ def resume(filename, base_freq, app_id=None, job_id=None,
     elif app_id:
         tit = app_id + f' vs. {base_freq} GHz'
 
-    axes = results.plot(kind='bar', ylabel='(%)', title=tit,
-                        figsize=(12.8, 9.6), rot=45, legend=False)
+    axes = results.plot(kind='bar', figsize=(12.8, 9.6),
+                        rot=45, legend=False, fontsize='x-large')
+    plt.gcf().suptitle(tit, fontsize='xx-large', weight='bold')
     ax2 = axes.twinx()
-    freqs.plot(ax=ax2, ylabel='avg. Freq (GHz)', ylim=(0, 3.5),
-               color=['cyan', 'purple'], linestyle='-.', legend=False)
+    freqs.plot(ax=ax2,  ylim=(0, 3.5),
+               color=['cyan', 'purple'], linestyle='-.', legend=False, fontsize='x-large')
+    ax2.set_ylabel(ylabel='avg. Freq (GHz)', fontsize='x-large', weight='bold')
 
     # create the legend
     handles_1, labels_1 = axes.get_legend_handles_labels()
@@ -193,7 +195,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
     for rect, label in zip(rects, labels):
         height = rect.get_height()
         axes.text(rect.get_x() + rect.get_width() / 2,
-                  height + 0.1, '{:.2f}'.format(label),
+                  height + 0.1, '{:.2f}%'.format(label),
                   ha='center', va='bottom')
     if show:
         plt.show()
