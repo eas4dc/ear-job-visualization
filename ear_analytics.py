@@ -174,7 +174,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
                         rot=45, legend=False, fontsize=20)
     axes.set_xlabel('POLICY, def. Freq (GHz)', fontsize=20)
 
-    plt.gcf().suptitle(tit, y=0.93, fontsize='22', weight='bold')
+    plt.gcf().suptitle(tit, fontsize='22', weight='bold')
 
     ax2 = axes.twinx()
     freqs.plot(ax=ax2,  ylim=(0, 3.5), color=['cyan', 'purple'],
