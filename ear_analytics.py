@@ -142,23 +142,23 @@ def resume(filename, base_freq, app_id=None, job_id=None,
     ref_data = re_dat.loc['monitoring', base_freq]
 
     # Computes savings and penalties
-    re_dat['Time penalty (%)'] = (
+    re_dat['Time penalty'] = (
             (re_dat['TIME'] - ref_data['TIME'])
             / ref_data['TIME']
             ) * 100
-    re_dat['Energy save (%)'] = (
+    re_dat['Energy save'] = (
             (ref_data['ENERGY_TAG'] - re_dat['ENERGY_TAG'])
             / ref_data['ENERGY_TAG']
             ) * 100
-    re_dat['Power save (%)'] = (
+    re_dat['Power save'] = (
             (ref_data['DC-NODE-POWER'] - re_dat['DC-NODE-POWER'])
             / ref_data['DC-NODE-POWER']
             ) * 100
 
     dropped = re_dat.drop(('monitoring', base_freq))
 
-    results = dropped[['Time penalty (%)', 'Energy save (%)',
-                       'Power save (%)']]
+    results = dropped[['Time penalty', 'Energy save',
+                       'Power save']]
 
     # Get avg. cpu and imc frequencies
     freqs = dropped[['avg_cpu_freq', 'avg_imc_freq']]
@@ -171,18 +171,21 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         tit = app_id + f' vs. {base_freq} GHz'
 
     axes = results.plot(kind='bar', figsize=(12.8, 9.6),
-                        rot=45, legend=False, fontsize='x-large')
-    plt.gcf().suptitle(tit, fontsize='xx-large', weight='bold')
+                        rot=45, legend=False, fontsize=20)
+    axes.set_xlabel('POLICY, def. Freq (GHz)', fontsize=20)
+
+    plt.gcf().suptitle(tit, y=0.93, fontsize='22', weight='bold')
+
     ax2 = axes.twinx()
-    freqs.plot(ax=ax2,  ylim=(0, 3.5),
-               color=['cyan', 'purple'], linestyle='-.', legend=False, fontsize='x-large')
-    ax2.set_ylabel(ylabel='avg. Freq (GHz)', fontsize='x-large', weight='bold')
+    freqs.plot(ax=ax2,  ylim=(0, 3.5), color=['cyan', 'purple'],
+               linestyle='-.', legend=False, fontsize=20)
+    ax2.set_ylabel(ylabel='avg. Freq (GHz)', labelpad=20.0, fontsize=20)
 
     # create the legend
     handles_1, labels_1 = axes.get_legend_handles_labels()
     handles_2, labels_2 = ax2.get_legend_handles_labels()
 
-    axes.legend(handles_1 + handles_2, labels_1 + labels_2, loc=0)
+    axes.legend(handles_1 + handles_2, labels_1 + labels_2, loc=0, fontsize=15)
 
     # Plot a grid
     plt.grid(axis='y', ls='--', alpha=0.5)
@@ -196,7 +199,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         height = rect.get_height()
         axes.text(rect.get_x() + rect.get_width() / 2,
                   height + 0.1, '{:.2f}%'.format(label),
-                  ha='center', va='bottom')
+                  ha='center', va='bottom', fontsize=12)
     if show:
         plt.show()
     else:
@@ -327,7 +330,7 @@ def runtime(filename, mtrcs, req_metrics,
         tit = metric_name
         if title is not None:
             tit = f'{title}: {metric_name}'
-        fig.suptitle(tit, size='xx-large', weight='bold')
+        fig.suptitle(tit, y=0.93, size=22, weight='bold')
 
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
                            width_ratios=(9.5, 0.5))
