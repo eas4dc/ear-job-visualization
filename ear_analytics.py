@@ -2,85 +2,17 @@
     information given by EARL. """
 
 import argparse
-import configparser
-import os
-from itertools import dropwhile
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
 from matplotlib.gridspec import GridSpec
 
-
-class Metric:
-    """ Manage information of a metric. """
-
-    def __init__(self, key, name=None, values=(0, 1)):
-        self.key = key
-        self.name = name
-        self.range = values
-
-    def set_name(self, name):
-        """ Assigns the atribute 'name' of the instance. """
-        self.name = name
-
-    def set_values(self, values):
-        """ Assigns the range atribute (a tuple of floats) of the instance. """
-        self.range = values
-
-    def norm_func(self, clip=True):
-        """ Returns the normalization function. """
-        return Normalize(vmin=self.range[0], vmax=self.range[1], clip=clip)
-
-    def __str__(self):
-        return f'{self.key}: {self.name} -- {self.range}'
-
-
-class Metrics:
-    """ Manage all the metrics that this program can work with. """
-
-    def __init__(self):
-        self.metrics = dict()
-
-    def add_metric(self, metric):
-        """ Adds a new metric to the control data structure. """
-        self.metrics[metric.key] = metric
-
-    def get_metric(self, metric_key):
-        """ Returns the metric corresponding to the key passed. """
-        return self.metrics[metric_key]
-
-    def __str__(self):
-        res = ''
-        for metric in self.metrics.values():
-            res += (str(metric) + '\n')
-        return res
-
-
-def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
-    """
-    Filters the DataFrame `data_f` by `job_id`
-    and/or `step_id` and/or `app_id`.
-    """
-
-    def mask(data_f, key, value):
-        if key in data_f.columns:
-            if value is not None:
-                return data_f[data_f[key] == value]
-        # print(f'{key} is not a column name')
-        return data_f
-
-    pd.DataFrame.mask = mask
-
-    return (data_f
-            .mask('APP_ID', app_id)
-            .mask('JOB_ID', job_id)
-            .mask('JID', job_id)
-            .mask('STEPID', step_id)
-            )
+from io_api import read_data, read_ini
+from metrics import init_metrics
+from utils import filter_by_job_step_app
 
 
 def resume(filename, base_freq, app_id=None, job_id=None,
@@ -108,7 +40,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
                   round(data_f['AVG.CPUFREQ'] * 10**-6, 4),
                   avg_imc_freq=lambda x:
                   round(data_f['AVG.IMCFREQ'] * 10**-6, 4),
-                  ENERGY_TAG=lambda x:
+                  energy=lambda x:
                   data_f['TIME'] * data_f['DC-NODE-POWER'],
                 )
                 .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
@@ -120,7 +52,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
 
     # Compute average step energy consumed
     energy_sums = (data_f
-                   .groupby(['POLICY', 'def_freq', 'STEP_ID'])['ENERGY_TAG']
+                   .groupby(['POLICY', 'def_freq', 'STEP_ID'])['energy']
                    .sum()
                    )
 
@@ -147,8 +79,8 @@ def resume(filename, base_freq, app_id=None, job_id=None,
             / ref_data['TIME']
             ) * 100
     re_dat['Energy save'] = (
-            (ref_data['ENERGY_TAG'] - re_dat['ENERGY_TAG'])
-            / ref_data['ENERGY_TAG']
+            (ref_data['energy'] - re_dat['energy'])
+            / ref_data['energy']
             ) * 100
     re_dat['Power save'] = (
             (ref_data['DC-NODE-POWER'] - re_dat['DC-NODE-POWER'])
@@ -209,47 +141,6 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         plt.savefig(fname=name, bbox_inches='tight')
 
 
-def read_data(file_path, sep=';'):
-    """
-    This function reads data properly whether the input `file_path` is a list
-    of concret files, is a directory #,or a list of directories,# and returns a
-    pandas.DataFrame object.
-    """
-
-    def load_files(filenames, base_path=None, sep=sep):
-        for filename in filenames:
-            if base_path:
-                path_file = base_path + '/' + filename
-            else:
-                path_file = filename
-            yield pd.read_csv(path_file, sep=sep)
-
-    if isinstance(file_path, str):
-        # `file_path` is only a string containing some file or a directory
-        if os.path.isfile(file_path):
-            print(f'reading file {file_path}')
-            data_f = pd.concat(load_files([file_path]), ignore_index=True)
-        elif os.path.isdir(file_path):
-            print(f'reading files contained in directory {file_path}')
-            print(f'{os.listdir(file_path)}')
-            data_f = pd.concat(load_files(os.listdir(file_path),
-                               base_path=file_path),
-                               ignore_index=True)
-        else:
-            print(f'{file_path} does not exist!')
-            raise FileNotFoundError
-    elif isinstance(file_path, list):
-        # `file_path` is a list containing files
-        try:
-            no_exists_file = next(dropwhile(os.path.exists, file_path))
-            print(f'file {no_exists_file} does not exist!')
-            raise FileNotFoundError
-        except StopIteration:
-            print(f'reading files {file_path}')
-            data_f = pd.concat(load_files(file_path), ignore_index=True)
-    return data_f
-
-
 def heatmap(n_sampl=32):
     """ Prepare the heatmap colormap, where 'n_sampl'
         defines the number of color samples. """
@@ -263,7 +154,7 @@ def heatmap(n_sampl=32):
 
 
 def runtime(filename, mtrcs, req_metrics,
-              show=False, title=None, job_id=None, step_id=None):
+            show=False, title=None, job_id=None, step_id=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -271,27 +162,10 @@ def runtime(filename, mtrcs, req_metrics,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
-    def preprocess_df(data_f):
-        """
-        Pre-process DataFrame `data_f` to get workable data.
-        """
-        return (data_f
-                .assign(
-                  GPOWER=lambda x: round(data_f['GPOWER'] * 10**-6, 4),
-                  avg_cpu_freq=lambda x:
-                  round(data_f['AVG.CPUFREQ'] * 10**-6, 4),
-                  avg_imc_freq=lambda x:
-                  round(data_f['AVG.IMCFREQ'] * 10**-6, 4),
-                  ENERGY_TAG=lambda x:
-                  data_f['TIME'] * data_f['DC-NODE-POWER'],
-                )
-                .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
-                )
-    # print('filtering...')
-    data_f = filter_by_job_step_app(read_data(filename), job_id=job_id, step_id=step_id)
-    # print(data_f)
-    group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP']).agg(lambda x: x).unstack(level=0)
-    # print(group_by_node)
+    data_f = filter_by_job_step_app(read_data(filename), job_id=job_id,
+                                    step_id=step_id)
+    group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP'])\
+        .agg(lambda x: x).unstack(level=0)
 
     # Prepare x-axe range for iterations captured
     x_sampl = np.linspace(min(group_by_node.index.values),
@@ -346,7 +220,7 @@ def runtime(filename, mtrcs, req_metrics,
             axes.set_xlim(extent[0], extent[1])
             # Uncomment these lines to show timestamp labels on x axe
             # if i != len(m_data_array) - 1:
-              #  axes.set_xticklabels([])
+            #     axes.set_xticklabels([])
             axes.set_xticks([])
 
         # fig.tight_layout()
@@ -371,7 +245,7 @@ def runtime_parser_action_closure(metrics):
         """ Action for `recursive` subcommand """
         print(args)
         runtime(args.input_file, metrics, args.metrics,
-                  args.show, args.title, args.jobid, args.stepid)
+                args.show, args.title, args.jobid, args.stepid)
 
     """
     def print_in_build_proces(args):
@@ -414,8 +288,8 @@ def build_parser(metrics):
                         help='Sets the output image name.'
                         ' Only valid if `--save` flag is set.')
     parser.add_argument('-j', '--jobid', type=int,
-                            help='Sets the JOB ID you are working'
-                            ' with.')
+                        help='Sets the JOB ID you are working'
+                        ' with.')
 
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
@@ -453,36 +327,6 @@ def build_parser(metrics):
     parser_res.set_defaults(func=res_parser_action)
 
     return parser
-
-
-def read_ini(filename):
-    """
-    Load the configuration file `filename`
-    """
-
-    def parse_float_tuple(in_str):
-        """
-        Given a tuple of two ints in str type, returns a tuple of two ints.
-        """
-        return tuple(float(k.strip()) for k in in_str[1:-1].split(','))
-
-    config = configparser.ConfigParser(converters={'tuple': parse_float_tuple})
-    config.read(filename)
-    return config
-
-
-def init_metrics(config):
-    """
-    Based on configuration stored in `config`,
-    inits the metric types used by this software.
-    """
-    mts = Metrics()
-
-    for metric in config['METRICS']:
-        mts.add_metric(Metric(metric, metric.upper(),
-                       config['METRICS'].gettuple(metric)))
-
-    return mts
 
 
 def main():
