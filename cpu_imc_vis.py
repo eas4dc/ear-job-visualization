@@ -11,7 +11,7 @@ from utils import filter_by_job_step_app
 
 
 def make_heatmap(filename, mtrcs, req_metrics, show=False,
-                 title=None, job_id=None):
+                 title=None):
     def preprocess_df(data_f):
         """
         Pre-process DataFrame `data_f` to get workable data.
@@ -30,8 +30,7 @@ def make_heatmap(filename, mtrcs, req_metrics, show=False,
                 )
 
     # Filter rows and pre-process data
-    data_f = preprocess_df(filter_by_job_step_app(read_data(filename),
-                           job_id=job_id))
+    data_f = preprocess_df(read_data(filename))
 
     grouped_by_step = data_f.groupby('STEPID').mean()
 
@@ -48,8 +47,11 @@ def make_heatmap(filename, mtrcs, req_metrics, show=False,
         idxs = [(x, y) for x in heatmap.index for y in heatmap.columns]
 
         for idx in idxs:
-            heatmap.loc[idx[0]][idx[1]] = \
-                grouped_by_cpu_imc.loc[idx[0], idx[1]][metric_name]
+            try:
+                heatmap.loc[idx[0]][idx[1]] = \
+                    grouped_by_cpu_imc.loc[idx[0], idx[1]][metric_name]
+            except KeyError:
+                continue
 
         heatmap.index.name = None
         heatmap.columns.name = None
@@ -76,7 +78,7 @@ def parser_action_closure(metrics):
         """ Action for `recursive` subcommand """
         print(args)
         make_heatmap(args.input_file, metrics, args.metrics,
-                     args.show, args.title, args.jobid)
+                     args.show, args.title)
 
     return hm_parser_action
 
