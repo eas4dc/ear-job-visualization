@@ -271,7 +271,7 @@ def build_parser(metrics):
                                      description='High level support for read '
                                      'and visualize information files given by'
                                      ' EARL.')
-    parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 2.0')
     parser.add_argument('input_file', help='Specifies the input file(s) name(s'
                         ') to read data from.')
 
