@@ -103,9 +103,9 @@ def build_parser(metrics):
     group.add_argument('--show', action='store_true',
                        help='Show the resulting figure.')
     parser.add_argument('-t', '--title',
-                        help='Set resulting figures title: "title: %metric".')
+                        help='Set resulting figures title: "title: metric".')
     parser.add_argument('-o', '--output',
-                        help='Set resulting files names: "output_%metric.jpg"'
+                        help='Set resulting files names: "output_metric.jpg"'
                         '.')
     parser.add_argument('-m', '--metrics', nargs='+',
                         choices=list(metrics.metrics.keys()),
