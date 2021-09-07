@@ -7,11 +7,10 @@ import seaborn as sns
 
 from io_api import read_ini, read_data
 from metrics import init_metrics
-from utils import filter_by_job_step_app
 
 
 def make_heatmap(filename, mtrcs, req_metrics, show=False,
-                 title=None):
+                 title=None, output=None):
     def preprocess_df(data_f):
         """
         Pre-process DataFrame `data_f` to get workable data.
@@ -30,12 +29,10 @@ def make_heatmap(filename, mtrcs, req_metrics, show=False,
                 )
 
     # Filter rows and pre-process data
-    data_f = preprocess_df(read_data(filename))
-
-    grouped_by_step = data_f.groupby('STEPID').mean()
-
-    grouped_by_cpu_imc = grouped_by_step.groupby(['def_freq', 'avg_imc_freq'])\
-        .mean().rename(index=lambda x: round(x, 4))
+    grouped_by_cpu_imc = (preprocess_df(read_data(filename))
+                          .groupby('STEPID').mean()
+                          .groupby(['def_freq', 'avg_imc_freq']).mean()
+                          .rename(index=lambda x: round(x, 4)))
 
     def_freq_vals = grouped_by_cpu_imc.index.unique(level='def_freq')
     avg_imc_vals = grouped_by_cpu_imc.index.unique(level='avg_imc_freq')
@@ -65,7 +62,10 @@ def make_heatmap(filename, mtrcs, req_metrics, show=False,
 
         axes = sns.heatmap(heatmap.astype(float), cmap='YlOrRd')
         fig.add_axes(axes)
-        plt.savefig(fname=f'heatmap_{metric_name}.jpg', bbox_inches='tight')
+        filename = f'heatmap_{metric_name}.jpg'
+        if output is not None:
+            filename = f'{output}_{metric_name}.jpg'
+        plt.savefig(fname=filename, bbox_inches='tight')
 
 
 def parser_action_closure(metrics):
@@ -78,7 +78,7 @@ def parser_action_closure(metrics):
         """ Action for `recursive` subcommand """
         print(args)
         make_heatmap(args.input_file, metrics, args.metrics,
-                     args.show, args.title)
+                     args.show, args.title, args.output)
 
     return hm_parser_action
 
@@ -103,7 +103,10 @@ def build_parser(metrics):
     group.add_argument('--show', action='store_true',
                        help='Show the resulting figure.')
     parser.add_argument('-t', '--title',
-                        help='Set resulting figures "title + %metric".')
+                        help='Set resulting figures title: "title: %metric".')
+    parser.add_argument('-o', '--output',
+                        help='Set resulting files names: "output_%metric.jpg"'
+                        '.')
     parser.add_argument('-m', '--metrics', nargs='+',
                         choices=list(metrics.metrics.keys()),
                         required=True, help='Specify which metrics you wan'
