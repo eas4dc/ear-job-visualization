@@ -22,6 +22,8 @@ def make_heatmap(filename, mtrcs, req_metrics, show=False,
                   round(data_f['AVG.CPUFREQ'] * 10**-6, 4),
                   avg_imc_freq=lambda x:
                   round(data_f['AVG.IMCFREQ'] * 10**-6, 4),
+                  def_imc_freq=lambda x:
+                  round(data_f['AVG.IMCFREQ'] * 10**-6, 1),
                   energy=lambda x:
                   data_f['TIME'] * data_f['DC-NODE-POWER'],
                 )
@@ -30,12 +32,11 @@ def make_heatmap(filename, mtrcs, req_metrics, show=False,
 
     # Filter rows and pre-process data
     grouped_by_cpu_imc = (preprocess_df(read_data(filename))
-                          .groupby('STEPID').mean()
-                          .groupby(['def_freq', 'avg_imc_freq']).mean()
-                          .rename(index=lambda x: round(x, 4)))
+                          .groupby(['def_freq', 'def_imc_freq']).mean()
+                          )
 
     def_freq_vals = grouped_by_cpu_imc.index.unique(level='def_freq')
-    avg_imc_vals = grouped_by_cpu_imc.index.unique(level='avg_imc_freq')
+    avg_imc_vals = grouped_by_cpu_imc.index.unique(level='def_imc_freq')
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
