@@ -7,6 +7,7 @@ bleach==4.1.0
 certifi==2021.5.30
 chardet==4.0.0
 charset-normalizer==2.0.4
+colorcet==2.0.6
 cycler==0.10.0
 decorator==5.0.9
 defusedxml==0.7.1
@@ -33,7 +34,9 @@ numpy==1.19.5
 packaging==21.0
 pandas==1.1.5
 pandocfilters==1.4.3
+param==1.11.1
 Pillow==8.2.0
+pyct==0.4.8
 Pygments==2.10.0
 pyparsing==2.4.7
 pyrsistent==0.18.0
