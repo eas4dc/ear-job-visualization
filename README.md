@@ -135,15 +135,17 @@ Therefore we obtain:
 
 ```
 $ python3 ear_analytics.py dumy runtime --help
-
-usage: ear_analytics input_file recursive [-h] -m
-                                          {cpi,avg.freq,tpi,gbs,dc-node-power,dram-power,pck-power}
+usage: ear_analytics input_file runtime [-h] [-s STEPID] -m
+                                        {cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi}
+                                        [{cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi} ...]
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -m {cpi,avg.freq,tpi,gbs,dc-node-power,dram-power,pck-power}, --metrics {cpi,avg.freq,tpi,gbs,dc-node-power,dram-power,pck-power}
-                        Specify which metrics you want to visualize.
-
+  -h, --help                            show this help message and exit
+  -s, --stepid STEPID                   Sets the STEP ID of the job you are
+                                        working with.
+  -m, --metrics {cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi} [{cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi} ...]
+                                        Specify which metrics you want to
+                                        visualize.
 ```
 
 Generate a heatmap-based graph for each metric specified by *--metrics* argument.
@@ -153,13 +155,13 @@ The resulting figure (for each *--metric* specified) will be a timeline where fo
 
 #### Example
 
-The next table shows content of examples/pop_loops.csv file, which content output information of all loops recorded by EAR during the execution of POP application. We will visualize the CPI and GBS metrics reported by EAR for each of the 10 nodes this application was executed.
+The next table shows content of extra/examples/bt\_test\_loops file, which content output information of all loops recorded by EAR during the execution of a BT kernel configure to be executed with 160 MPI processes accross 4 nodes. We will visualize the CPI, GFLOPS and the percentage of time spent in MPI blocking calls reported by EAR for each of the 4 nodes this kernel was executed.
 
 ![alt text](examples/pop_loops_table.png)
 
 To get the wanted results, we type:
 
-`$ python3 ear_analytics.py examples/pop_loops.csv recursive --metrics cpi --metrics gbs`
+`$ python ear_analytics.py -t "BT 4N" -o "BT_4N" extra/examples/bt_test_loops runtime -m cpi gflops p.mpi`
 
 We get the following images:
 
