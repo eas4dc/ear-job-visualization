@@ -2,13 +2,15 @@
     information given by EARL. """
 
 import argparse
+import os
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.gridspec import GridSpec
+import colorcet as cc
 
 from common.io_api import read_data, read_ini, configure_verbosity, VERBOSE
 from common.metrics import init_metrics
@@ -155,7 +157,7 @@ def heatmap(n_sampl=32):
 
 
 def runtime(filename, mtrcs, req_metrics,
-            show=False, title=None, job_id=None, step_id=None):
+            show=False, title=None, job_id=None, step_id=None, output=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -163,14 +165,12 @@ def runtime(filename, mtrcs, req_metrics,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
+
     group_by_node = (filter_by_job_step_app(read_data(filename), job_id=job_id,
                                             step_id=step_id)
                      .groupby(['NODENAME', 'TIMESTAMP'])
                      .agg(lambda x: x).unstack(level=0)
                      )
-    # group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP'])\
-    # agg(lambda x: x).unstack(level=0)
-
     # Prepare x-axe range for iterations captured
     x_sampl = np.linspace(min(group_by_node.index.values),
                           max(group_by_node.index.values), dtype=int)
@@ -181,11 +181,7 @@ def runtime(filename, mtrcs, req_metrics,
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        # m_data = group_by_node[metric_name].interpolate(method='bfill',
-        # limit_area='inside')
         m_data = group_by_node[metric_name]  # .interpolate(method='bfill',
-        # print(m_data)
-        # limit_area='inside')
 
         for key in x_sampl:
             if key not in m_data.index:
@@ -198,8 +194,7 @@ def runtime(filename, mtrcs, req_metrics,
             if idx not in x_sampl:
                 m_data.drop(idx, inplace=True)
 
-        m_data_array = m_data.values.transpose()  # \
-        # .interpolate(method='bfill', limit_area='inside')\
+        m_data_array = m_data.values.transpose()
 
         # Create the resulting figure for current metric
         fig = plt.figure(figsize=[20.4, 0.5 * len(m_data.columns) * 2])
@@ -212,29 +207,44 @@ def runtime(filename, mtrcs, req_metrics,
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
                            width_ratios=(9.5, 0.5))
 
-        norm = mtrcs.get_metric(metric).norm_func()
+        # Switch below lines in order to apply the specific metric range
+        # norm = mtrcs.get_metric(metric).norm_func()
+        norm = Normalize(vmin=np.nanmin(m_data_array),
+                         vmax=np.nanmax(m_data_array), clip=True)
 
         for i, _ in enumerate(m_data_array):
             axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
             axes.set_yticks([])
             data = np.array(m_data_array[i], ndmin=2)
-            axes.imshow(data, cmap=heatmap(), norm=norm,
+            axes.imshow(data, cmap=cc.cm.bmy, norm=norm,
                         aspect='auto', extent=extent)
             axes.set_xlim(extent[0], extent[1])
             # Uncomment these lines to show timestamp labels on x axe
-            # if i != len(m_data_array) - 1:
-            #     axes.set_xticklabels([])
-            axes.set_xticks([])
+            if i != len(m_data_array) - 1:
+                axes.set_xticklabels([])
+            # axes.set_xticks([])
 
         # fig.tight_layout()
         col_bar_ax = fig.add_subplot(grid_sp[:, 1])
-        fig.colorbar(cm.ScalarMappable(cmap=heatmap(), norm=norm),
+        fig.colorbar(cm.ScalarMappable(cmap=cc.cm.bmy, norm=norm),
                      cax=col_bar_ax)
         if show:
             plt.show()
             plt.pause(0.001)
         else:
             name = f'runtime_{metric_name}.jpg'
+            if output is not None:
+                if os.path.isdir(output):
+                    print(f'storing file {filename} to {output} directory')
+                else:
+                    print(f'{output} directory does not exist! creating'
+                          f' directory and storing {filename} inside it.')
+                    os.makedirs(output)
+                if output[-1] == '/':
+                    filename = output + filename
+                else:
+                    filename = output + '/' + filename
+            print(f'Saving figure to {filename}')
             plt.savefig(fname=name, bbox_inches='tight')
 
 
@@ -247,9 +257,10 @@ def runtime_parser_action_closure(metrics):
     def run_parser_action(args):
         """ Action for `recursive` subcommand """
         configure_verbosity(args.verbosity)
-        VERBOSE(3, f'[INFO]Arguments parsed: {args}')
+        # VERBOSE(3, f'[INFO]Arguments parsed: {args}')
+        print(args)
         runtime(args.input_file, metrics, args.metrics,
-                args.show, args.title, args.jobid, args.stepid)
+                args.show, args.title, args.jobid, args.stepid, args.output)
 
     return run_parser_action
 
@@ -257,7 +268,7 @@ def runtime_parser_action_closure(metrics):
 def res_parser_action(args):
     """ Action for `resume` subcommand """
     configure_verbosity(args.verbosity)
-    VERBOSE(3, f'[INFO]Arguments parsed: {args}')
+    # VERBOSE(3, f'[INFO]Arguments parsed: {args}')
     resume(args.input_file, args.base_freq, args.app_name,
            args.jobid, args.show, args.output, args.title)
 
@@ -319,7 +330,8 @@ def build_parser(metrics):
                                        help='Generate a heatmap graph showing'
                                        ' the behaviour of some metrics monitor'
                                        'ed with EARL. The file must be outpute'
-                                       'd by `eacct -r` command.',
+                                       "d by `eacct -r` command or by an EAR's"
+                                       ' report plugin.',
                                        formatter_class=formatter)
     parser_run.add_argument('-s', '--stepid', type=int,
                             help='Sets the STEP ID of the job you are working'
@@ -353,7 +365,6 @@ def main():
 
     # Read configuration file and init `metrics` data structure
     metrics = init_metrics(read_ini('config.ini'))
-    VERBOSE(3, f"[INFO]METRICS CONFIG\n{metrics.__str__()}")
 
     # create the top-level parser
     parser = build_parser(metrics)
