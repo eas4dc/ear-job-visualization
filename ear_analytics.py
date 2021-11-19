@@ -10,9 +10,9 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap
 from matplotlib.gridspec import GridSpec
 
-from .common.io_api import read_data, read_ini
-from .common.metrics import init_metrics
-from .common.utils import filter_by_job_step_app
+from common.io_api import read_data, read_ini, configure_verbosity, VERBOSE
+from common.metrics import init_metrics
+from common.utils import filter_by_job_step_app
 
 
 def resume(filename, base_freq, app_id=None, job_id=None,
@@ -163,10 +163,13 @@ def runtime(filename, mtrcs, req_metrics,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
-    data_f = filter_by_job_step_app(read_data(filename), job_id=job_id,
-                                    step_id=step_id)
-    group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP'])\
-        .agg(lambda x: x).unstack(level=0)
+    group_by_node = (filter_by_job_step_app(read_data(filename), job_id=job_id,
+                                            step_id=step_id)
+                     .groupby(['NODENAME', 'TIMESTAMP'])
+                     .agg(lambda x: x).unstack(level=0)
+                     )
+    # group_by_node = data_f.groupby(['NODENAME', 'TIMESTAMP'])\
+    # agg(lambda x: x).unstack(level=0)
 
     # Prepare x-axe range for iterations captured
     x_sampl = np.linspace(min(group_by_node.index.values),
@@ -175,7 +178,6 @@ def runtime(filename, mtrcs, req_metrics,
               x_sampl[-1]+(x_sampl[1]-x_sampl[0])//2, 0, 1]
 
     # Compute the heatmap graph for each metric specified by the input
-
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
@@ -244,21 +246,18 @@ def runtime_parser_action_closure(metrics):
 
     def run_parser_action(args):
         """ Action for `recursive` subcommand """
-        print(args)
+        configure_verbosity(args.verbosity)
+        VERBOSE(3, f'[INFO]Arguments parsed: {args}')
         runtime(args.input_file, metrics, args.metrics,
                 args.show, args.title, args.jobid, args.stepid)
-
-    """
-    def print_in_build_proces(args):
-        print("This functionality is still under development.")
-    """
 
     return run_parser_action
 
 
 def res_parser_action(args):
     """ Action for `resume` subcommand """
-    print(args)
+    configure_verbosity(args.verbosity)
+    VERBOSE(3, f'[INFO]Arguments parsed: {args}')
     resume(args.input_file, args.base_freq, args.app_name,
            args.jobid, args.show, args.output, args.title)
 
@@ -268,11 +267,25 @@ def build_parser(metrics):
     Given the used `metrics`,
     returns a parser to read and check command line arguments.
     """
+    class CustomHelpFormatter(argparse.HelpFormatter):
+        def __init__(self, prog):
+            super().__init__(prog, max_help_position=40, width=80)
+
+        def _format_action_invocation(self, action):
+            if not action.option_strings or action.nargs == 0:
+                return super()._format_action_invocation(action)
+            default = self._get_default_metavar_for_optional(action)
+            args_string = self._format_args(action, default)
+            return ', '.join(action.option_strings) + ' ' + args_string
+
+    def formatter(prog):
+        return CustomHelpFormatter(prog)
+
     parser = argparse.ArgumentParser(prog='ear_analytics',
                                      description='High level support for read '
                                      'and visualize information files given by'
-                                     ' EARL.')
-    parser.add_argument('--version', action='version', version='%(prog)s 2.0')
+                                     ' EARL.', formatter_class=formatter)
+    parser.add_argument('--version', action='version', version='%(prog)s 2.1')
     parser.add_argument('input_file', help='Specifies the input file(s) name(s'
                         ') to read data from.')
 
@@ -291,6 +304,9 @@ def build_parser(metrics):
     parser.add_argument('-j', '--jobid', type=int,
                         help='Sets the JOB ID you are working'
                         ' with.')
+    parser.add_argument('-v', '--verbosity', action="count",
+                        help="increase output verbosity"
+                        "(e.g., -vv is more than -v)")
 
     subparsers = parser.add_subparsers(help='The two functionalities currently'
                                        ' supported by this program.',
@@ -303,7 +319,8 @@ def build_parser(metrics):
                                        help='Generate a heatmap graph showing'
                                        ' the behaviour of some metrics monitor'
                                        'ed with EARL. The file must be outpute'
-                                       'd by `eacct -r` command.')
+                                       'd by `eacct -r` command.',
+                                       formatter_class=formatter)
     parser_run.add_argument('-s', '--stepid', type=int,
                             help='Sets the STEP ID of the job you are working'
                             ' with.')
@@ -317,7 +334,8 @@ def build_parser(metrics):
     parser_res = subparsers.add_parser('resume',
                                        help='Generate a resume about Energy'
                                        ' and Power save, and Time penalty of'
-                                       ' an application monitored with EARL.')
+                                       ' an application monitored with EARL.',
+                                       formatter_class=formatter)
     parser_res.add_argument('base_freq', help='Specify which'
                             ' frequency is used as base '
                             'reference for computing and showing'
@@ -335,7 +353,7 @@ def main():
 
     # Read configuration file and init `metrics` data structure
     metrics = init_metrics(read_ini('config.ini'))
-    # print(f'METRICS CONFIG\n{metrics.__str__()}')
+    VERBOSE(3, f"[INFO]METRICS CONFIG\n{metrics.__str__()}")
 
     # create the top-level parser
     parser = build_parser(metrics)

@@ -61,3 +61,18 @@ def read_ini(filename):
     config = configparser.ConfigParser(converters={'tuple': parse_float_tuple})
     config.read(filename)
     return config
+
+
+VERBOSE = None
+
+
+def configure_verbosity(verb_lvl):
+    if verb_lvl:
+        def _verbose(*verb_args):
+            if verb_args[0] > (3 - verb_lvl):
+                print(verb_args[1])
+    else:
+        _verbose = lambda *a: None  # do-nothing function
+
+        global VERBOSE
+        VERBOSE = _verbose
