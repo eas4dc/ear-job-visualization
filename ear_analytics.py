@@ -10,9 +10,9 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap
 from matplotlib.gridspec import GridSpec
 
-from io_api import read_data, read_ini
-from metrics import init_metrics
-from utils import filter_by_job_step_app
+from .common.io_api import read_data, read_ini
+from .common.metrics import init_metrics
+from .common.utils import filter_by_job_step_app
 
 
 def resume(filename, base_freq, app_id=None, job_id=None,
@@ -27,7 +27,8 @@ def resume(filename, base_freq, app_id=None, job_id=None,
     If the file `filename` contains resume information
     of multiple applications this function also accepts the parameter
     `app_name` and/or `job_id` which filters file's data to work only with'
-    ' `app_name` and/or `job_id` application results. """
+    ' `app_name` and/or `job_id` application results.
+    """
 
     def preprocess_df(data_f):
         """
@@ -340,17 +341,6 @@ def main():
     parser = build_parser(metrics)
 
     args = parser.parse_args()
-
-    """
-    if args.log:
-        log_lvl = getattr(logging, args.log.upper(), None)
-        if not isinstance(log_lvl, int):
-            logging.warning(f'Invalid log level: {args.log}'
-                            '\nSetting log level to default...')
-            log_lvl = getattr(logging, 'INFO', None)
-    else:
-        log_lvl = getattr(logging, 'INFO', None)
-    """
 
     args.func(args)
 
