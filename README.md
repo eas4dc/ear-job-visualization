@@ -165,9 +165,9 @@ To get the wanted results, we type:
 
 We get the following images:
 
-![alt text](examples/pop_loops_cpi.png)
-
-![alt text](examples/pop_loops_gbs.png)
+![alt text](extra/examples/bt_test_runtime/runtime_CPI.jpg)
+![alt text](extra/examples/bt_test_runtime/runtime_GFLOPS.jpg)
+![alt text](extra/examples/bt_test_runtime/runtime_P.MPI.jpg)
 
 ## Contact
 
