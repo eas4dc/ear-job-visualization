@@ -208,9 +208,9 @@ def runtime(filename, mtrcs, req_metrics,
                            width_ratios=(9.5, 0.5))
 
         # Switch below lines in order to apply the specific metric range
-        # norm = mtrcs.get_metric(metric).norm_func()
-        norm = Normalize(vmin=np.nanmin(m_data_array),
-                         vmax=np.nanmax(m_data_array), clip=True)
+        norm = mtrcs.get_metric(metric).norm_func()
+        # norm = Normalize(vmin=np.nanmin(m_data_array),
+        # vmax=np.nanmax(m_data_array), clip=True)
 
         for i, _ in enumerate(m_data_array):
             axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
