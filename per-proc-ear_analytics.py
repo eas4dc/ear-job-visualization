@@ -2,7 +2,7 @@
     information given by EARL. """
 
 import argparse
-import time
+import os
 
 import pandas as pd
 import numpy as np
@@ -50,7 +50,7 @@ def runtime(filename, mtrcs, req_metrics,
 
     # Pre-process and create new Series derived from existing ones
 
-    # Convert time period from microseconds to seconds
+    # Convert time period from microseconds to miliseconds
     data_f['TIME PERIOD'] = round(data_f['TIME PERIOD'] * (10**-3), 2)
 
     # Total synchronization calls
@@ -67,6 +67,10 @@ def runtime(filename, mtrcs, req_metrics,
 
     data_f['BLOCK_CALLS'] = (data_f['PERC.BLOCK_CALLS'] / 100) \
         * data_f['TOTAL_MPI_CALLS']
+
+    data_f['BLOCK_CALLS_SEC'] = (data_f['BLOCK_CALLS'] /
+                                 round(data_f['TIME PERIOD']
+                                       * (10**-3), 2))
 
     data_f['BLOCK_TIME'] = (data_f['PERC.BLOCK_TIME'] / 100) \
         * data_f['TIME PERIOD']
@@ -96,188 +100,6 @@ def runtime(filename, mtrcs, req_metrics,
                                                   .agg(np.std)
                                                   )
 
-    """
-    # Plot, for each node, the average metrics requested for each process
-
-    for idx in groupby_node_rank_mean.index.unique(level='NODE_ID'):
-        fig = plt.figure(figsize=[6.4 * 3, 4.8 * 2])
-        fig.suptitle(f"Node {idx}", size='xx-large', weight='bold')
-        grid_s = GridSpec(nrows=2, ncols=3)
-
-        x_data = np.array(groupby_node_rank_mean.loc[idx].index, ndmin=1)
-
-        mpi = fig.add_subplot(grid_s[0, 0], ylabel='MPI calls',
-                              title="Total MPI calls per process")
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['TOTAL MPI CALLS'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['TOTAL MPI CALLS'], ndmin=1)
-        mpi.bar(x_data, y_data, yerr=y_err)
-
-        perc_mpi = fig.add_subplot(grid_s[0, 1], ylabel='%MPI',
-                                   title="% MPI per process")
-        y_data = np.array(groupby_node_rank_mean.loc[idx]['PERC. MPI'],
-                          ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['PERC. MPI'], ndmin=1)
-        perc_mpi.bar(x_data, y_data, yerr=y_err)
-
-        perc_sync_time = fig.add_subplot(grid_s[1, 0], ylabel='%Sync time',
-                                         title="% Sync. time per process")
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['PERC. SYNC TIME'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['PERC. SYNC TIME'], ndmin=1)
-        perc_sync_time.bar(x_data, y_data, yerr=y_err)
-
-        perc_block_time = fig.add_subplot(grid_s[1, 1], ylabel='%Block time',
-                                          title="% Block. time per process")
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['PERC. BLOCK TIME'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['PERC. BLOCK TIME'], ndmin=1)
-        perc_block_time.bar(x_data, y_data, yerr=y_err)
-
-        perc_collec_time = fig.add_subplot(grid_s[1, 2], ylabel='%Collec time',
-                                           title="% Collec. time per process")
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['PERC. COLLEC TIME'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['PERC. COLLEC TIME'], ndmin=1)
-        perc_collec_time.bar(x_data, y_data, yerr=y_err)
-
-        cpi = fig.add_subplot(grid_s[0, 2], ylabel='CPI',
-                              title="CPI per process")
-        y_data = np.array(groupby_node_rank_mean.loc[idx]['CPI'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['CPI'], ndmin=1)
-        cpi.bar(x_data, y_data, yerr=y_err)
-
-        if not show:
-            filename = f'resume_def_mpi_metrics_{idx}.jpg'
-            plt.savefig(fname=filename, bbox_inches='tight')
-        else:
-            plt.show()
-            plt.pause(0.001)
-
-        fig = plt.figure(figsize=[6.4 * 3, 4.8 * 3])
-        fig.suptitle(f"Node {idx}", size='xx-large', weight='bold')
-        grid_s = GridSpec(nrows=3, ncols=3)
-
-        sync_mpi_time_per_call = fig.add_subplot(grid_s[0, 0],
-                                                 ylabel='Time per sync. call',
-                                                 title='Average time per sync.'
-                                                       ' call per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['TIME_PER_SYNC_CALL'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['TIME_PER_SYNC_CALL'], ndmin=1)
-        sync_mpi_time_per_call.bar(x_data, y_data, yerr=y_err)
-
-        block_mpi_time_per_call = fig.add_subplot(grid_s[0, 1],
-                                                  ylabel='Time per block. cal'
-                                                  'l', title='Average time per'
-                                                  ' block. call per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['TIME_PER_BLOCK_CALL'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['TIME_PER_BLOCK_CALL'], ndmin=1)
-        block_mpi_time_per_call.bar(x_data, y_data, yerr=y_err)
-
-        collec_mpi_time_per_call = fig.add_subplot(grid_s[0, 2],
-                                                   ylabel='Time per collec. ca'
-                                                   'll', title='Average time p'
-                                                   'er collec. call per proces'
-                                                   's')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['TIME_PER_COLLEC_CALL'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['TIME_PER_COLLEC_CALL'], ndmin=1)
-        collec_mpi_time_per_call.bar(x_data, y_data, yerr=y_err)
-
-        total_sync_calls = fig.add_subplot(grid_s[1, 0],
-                                           ylabel='Total sync. calls',
-                                           title='Average sync. calls'
-                                                 ' per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['SYNC_CALLS'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['SYNC_CALLS'], ndmin=1)
-        total_sync_calls.bar(x_data, y_data, yerr=y_err)
-
-        total_block_calls = fig.add_subplot(grid_s[1, 1],
-                                            ylabel='Total block. calls',
-                                            title='Average block. calls'
-                                                  ' per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['BLOCK_CALLS'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['BLOCK_CALLS'], ndmin=1)
-        total_block_calls.bar(x_data, y_data, yerr=y_err)
-
-        total_collec_calls = fig.add_subplot(grid_s[1, 2],
-                                             ylabel='Total collec. calls',
-                                             title='Average collec. calls'
-                                                   ' per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['COLLEC_CALLS'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['COLLEC_CALLS'], ndmin=1)
-        total_collec_calls.bar(x_data, y_data, yerr=y_err)
-
-        sync_mpi_time = fig.add_subplot(grid_s[2, 0],
-                                        ylabel='Sync. time',
-                                        title='Average sync. time'
-                                              ' per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['SYNC_TIME'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['SYNC_TIME'], ndmin=1)
-        sync_mpi_time.bar(x_data, y_data, yerr=y_err)
-
-        block_mpi_time = fig.add_subplot(grid_s[2, 1],
-                                         ylabel='Block. time',
-                                         title='Average block. time'
-                                               ' per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['BLOCK_TIME'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['BLOCK_TIME'], ndmin=1)
-        block_mpi_time.bar(x_data, y_data, yerr=y_err)
-
-        collec_mpi_time = fig.add_subplot(grid_s[2, 2],
-                                          ylabel='Total collec. calls',
-                                          title='Average collec. calls'
-                                                ' per process')
-        y_data = np.array(groupby_node_rank_mean
-                          .loc[idx]['COLLEC_TIME'], ndmin=1)
-        y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
-            else np.array(groupby_node_rank_err
-                          .loc[idx]['COLLEC_TIME'], ndmin=1)
-        collec_mpi_time.bar(x_data, y_data, yerr=y_err)
-
-        if not show:
-            filename = f'resume_extra_mpi_metrics_{idx}.jpg'
-            plt.savefig(fname=filename, bbox_inches='tight')
-        else:
-            plt.show()
-            plt.pause(0.001)
-    """
-
     # Group data of any NODENAME across all timestamps
     # groupby_lrank_ts = data_f.groupby(['NODE_ID', 'LOCAL RANK', 'TIMESTAMP'])
     #    .agg(lambda x: x).unstack(level=0).unstack(level=0)
@@ -296,6 +118,11 @@ def runtime(filename, mtrcs, req_metrics,
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
+        # Get the maximum values for y-axes
+        max_y_lim_mean = groupby_node_rank_mean[metric_name].max()
+        max_y_lim_err = 0 if groupby_node_rank_err is None \
+            else groupby_node_rank_err[metric_name].max()
+
         # Plot, for each node, the average metrics requested for each process
 
         for node_id in groupby_node_rank_mean.index.unique(level='NODE_ID'):
@@ -307,17 +134,30 @@ def runtime(filename, mtrcs, req_metrics,
             x_data = np.array(groupby_node_rank_mean
                               .loc[node_id].index, ndmin=1)
 
-            mpi = fig.add_subplot(ylabel=f'{metric_name}',
+            axs = fig.add_subplot(ylabel=f'{metric_name}',
                                   title=f'Average {metric_name} per process')
             y_data = np.array(groupby_node_rank_mean
                               .loc[node_id][metric_name], ndmin=1)
             y_err = np.zeros(len(y_data)) if groupby_node_rank_err is None \
                 else np.array(groupby_node_rank_err
                               .loc[node_id][metric_name], ndmin=1)
-            mpi.bar(x_data, y_data, yerr=y_err)
+            axs.set_ylim(top=max_y_lim_mean + max_y_lim_err)
+            axs.bar(x_data, y_data, yerr=y_err)
 
             if not show:
                 filename = f'resume_{metric_name}_{node_id}.jpg'
+                if output is not None:
+                    if os.path.isdir(output):
+                        print(f'storing file {filename} to {output} directory')
+                    else:
+                        print(f'{output} directory does not exist! creating'
+                              f' directory and storing {filename} inside it.')
+                        os.makedirs(output)
+                    if output[-1] == '/':
+                        filename = output + filename
+                    else:
+                        filename = output + '/' + filename
+                print(f'Saving figure to {filename}')
                 plt.savefig(fname=filename, bbox_inches='tight')
             else:
                 plt.show()
@@ -369,54 +209,24 @@ def runtime(filename, mtrcs, req_metrics,
 
         if not show:
             filename = f'runtime_{metric_name}.jpg'
+            if output is not None:
+                if os.path.isdir(output):
+                    print(f'storing file {filename} to {output} directory')
+                else:
+                    print(f'{output} directory does not exist! creating'
+                          f' directory and storing {filename} inside it.')
+                    os.makedirs(output)
+                if output[-1] == '/':
+                    filename = output + filename
+                else:
+                    filename = output + '/' + filename
+            print(f'Saving figure to {filename}')
             plt.savefig(fname=filename, bbox_inches='tight')
         else:
             plt.show()
             plt.pause(0.001)
 
         plt.close(fig)
-
-        """
-        for idx in m_data.columns.unique(level='NODE_ID'):
-            m_data_array = m_data[idx].values.transpose()
-
-            fig = plt.figure(figsize=[20.4, 0.5 * len(m_data[idx]
-                                                      .columns) * 2])
-
-            tit = f'Node {idx} per proc. {metric_name}'
-            if title is not None:
-                tit = f'{title}: node {idx} per proc. {metric_name}'
-            fig.suptitle(tit, size='xx-large', weight='bold')
-
-            grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                               width_ratios=(9.5, 0.5))
-
-            norm = Normalize(vmin=np.nanmin(m_data_array),
-                             vmax=np.nanmax(m_data_array), clip=True)
-
-            for i, _ in enumerate(m_data_array):
-                axes = fig.add_subplot(grid_sp[i, 0],
-                                       ylabel=m_data[idx].columns[i])
-                axes.set_yticks([])
-                data = np.array(m_data_array[i], ndmin=2)
-                axes.imshow(data, cmap=heatmap(), norm=norm,
-                            aspect='auto', extent=extent)
-                axes.set_xlim(extent[0], extent[1])
-                # Uncomment these lines to show timestamp labels on x axe
-                # if i != len(m_data_array) - 1:
-                #     axes.set_xticklabels([])
-                axes.set_xticks([])
-
-            col_bar_ax = fig.add_subplot(grid_sp[:, 1])
-            fig.colorbar(cm.ScalarMappable(cmap=heatmap(), norm=norm),
-                         cax=col_bar_ax)
-            if show:
-                plt.show()
-                plt.pause(0.001)
-            else:
-                name = f'runtime_{metric_name}_{idx}.jpg'
-                plt.savefig(fname=name, bbox_inches='tight')
-        """
 
 
 def runtime_parser_action_closure(metrics):
@@ -429,7 +239,7 @@ def runtime_parser_action_closure(metrics):
         """ Action for `recursive` subcommand """
         print(args)
         runtime(args.input_file, metrics, args.metrics,
-                args.show, args.title, args.output)
+                args.show, args.title, args.output, args.error)
 
     return run_parser_action
 
@@ -459,6 +269,9 @@ def build_parser(metrics):
     parser.add_argument('-o', '--output',
                         help='Sets the output image name.'
                         ' Only valid if `--save` flag is set.')
+    parser.add_argument('-e', '--error', action='store_true',
+                        help='Show error bars based on standard'
+                             ' deviation for bar plots.')
 
     parser.add_argument('-m', '--metrics', nargs='+',
                         choices=list(metrics.metrics.keys()),
