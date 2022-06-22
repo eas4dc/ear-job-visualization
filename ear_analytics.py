@@ -11,8 +11,9 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.gridspec import GridSpec
 import colorcet as cc
+import concurrent.futures
 
-from common.io_api import read_data, read_ini, configure_verbosity, VERBOSE
+from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
 from common.utils import filter_by_job_step_app
 
@@ -166,22 +167,21 @@ def runtime(filename, mtrcs, req_metrics,
     and `mtrcs` supported by ear_analytics.
     """
 
-    group_by_node = (filter_by_job_step_app(read_data(filename), job_id=job_id,
+    df = (filter_by_job_step_app(read_data(filename), job_id=job_id,
                                             step_id=step_id)
                      .groupby(['NODENAME', 'TIMESTAMP'])
                      .agg(lambda x: x).unstack(level=0)
                      )
     # Prepare x-axe range for iterations captured
-    x_sampl = np.linspace(min(group_by_node.index.values),
-                          max(group_by_node.index.values), dtype=int)
+    x_sampl = np.linspace(min(df.index.values),
+                          max(df.index.values), dtype=int)
     extent = [x_sampl[0]-(x_sampl[1]-x_sampl[0])//2,
               x_sampl[-1]+(x_sampl[1]-x_sampl[0])//2, 0, 1]
 
-    # Compute the heatmap graph for each metric specified by the input
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        m_data = group_by_node[metric_name]  # .interpolate(method='bfill',
+        m_data = df[metric_name]
 
         for key in x_sampl:
             if key not in m_data.index:
@@ -205,28 +205,35 @@ def runtime(filename, mtrcs, req_metrics,
         fig.suptitle(tit, y=0.93, size=22, weight='bold')
 
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                           width_ratios=(9.5, 0.5))
+                           width_ratios=(9.5, 0.5), hspace=0, wspace=0.04)
 
         # Switch below lines in order to apply the specific metric range
+        # 1: config range
+        # 2: data max min range
         # norm = mtrcs.get_metric(metric).norm_func()
         norm = Normalize(vmin=np.nanmin(m_data_array),
                          vmax=np.nanmax(m_data_array), clip=True)
+        print(f'Using a gradient range of ({np.nanmin(m_data_array)}, {np.nanmax(m_data_array)})')
 
         for i, _ in enumerate(m_data_array):
             axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
             axes.set_yticks([])
+            axes.set_ylabel(axes.get_ylabel(), rotation=0, labelpad=50)
+
             data = np.array(m_data_array[i], ndmin=2)
-            axes.imshow(data, cmap=cc.cm.bmy, norm=norm,
+
+            axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm,
                         aspect='auto', extent=extent)
             axes.set_xlim(extent[0], extent[1])
+
             # Uncomment these lines to show timestamp labels on x axe
-            if i != len(m_data_array) - 1:
+            if i < len(m_data_array) - 1:
                 axes.set_xticklabels([])
             # axes.set_xticks([])
 
         # fig.tight_layout()
         col_bar_ax = fig.add_subplot(grid_sp[:, 1])
-        fig.colorbar(cm.ScalarMappable(cmap=cc.cm.bmy, norm=norm),
+        fig.colorbar(cm.ScalarMappable(cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
                      cax=col_bar_ax)
         if show:
             plt.show()
@@ -247,7 +254,6 @@ def runtime(filename, mtrcs, req_metrics,
             print(f'Saving figure to {filename}')
             plt.savefig(fname=name, bbox_inches='tight')
 
-
 def runtime_parser_action_closure(metrics):
     """
     Closure function used to return the action
@@ -256,8 +262,6 @@ def runtime_parser_action_closure(metrics):
 
     def run_parser_action(args):
         """ Action for `recursive` subcommand """
-        configure_verbosity(args.verbosity)
-        # VERBOSE(3, f'[INFO]Arguments parsed: {args}')
         print(args)
         runtime(args.input_file, metrics, args.metrics,
                 args.show, args.title, args.jobid, args.stepid, args.output)
@@ -267,8 +271,6 @@ def runtime_parser_action_closure(metrics):
 
 def res_parser_action(args):
     """ Action for `resume` subcommand """
-    configure_verbosity(args.verbosity)
-    # VERBOSE(3, f'[INFO]Arguments parsed: {args}')
     resume(args.input_file, args.base_freq, args.app_name,
            args.jobid, args.show, args.output, args.title)
 
