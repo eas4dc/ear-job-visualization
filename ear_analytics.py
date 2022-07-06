@@ -147,7 +147,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
 
 
 def runtime(filename, mtrcs, req_metrics,
-            show=False, title=None, job_id=None, step_id=None, output=None):
+            show=True, title=None, job_id=None, step_id=None, output=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
