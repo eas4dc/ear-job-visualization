@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.gridspec import GridSpec
 import colorcet as cc
 
@@ -18,7 +18,7 @@ from common.utils import filter_by_job_step_app
 
 
 def resume(filename, base_freq, app_id=None, job_id=None,
-           show=False, output=None, title=None):
+           save=False, output=None, title=None):
     """
     This function generates a graph of performance metrics given by `filename`.
 
@@ -106,7 +106,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         tit = app_id + f' vs. {base_freq} GHz'
 
     axes = results.plot(kind='bar', figsize=(12.8, 9.6),
-                        rot=0, legend=False, fontsize=20)
+                        rot=30, legend=False, fontsize=20)
     axes.set_xlabel('POLICY, def. Freq (GHz)', fontsize=20)
 
     plt.gcf().suptitle(tit, fontsize='22', weight='bold')
@@ -137,7 +137,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         axes.text(rect.get_x() + rect.get_width() / 2,
                   height + 0.1, '{:.2f}%'.format(label),
                   ha='center', va='bottom', fontsize=12)
-    if show:
+    if not save:
         plt.show()
     else:
         name = 'resume.jpg'
@@ -147,7 +147,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
 
 
 def runtime(filename, mtrcs, req_metrics,
-            show=True, title=None, job_id=None, step_id=None, output=None):
+            save=False, title=None, job_id=None, step_id=None, output=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -155,6 +155,23 @@ def runtime(filename, mtrcs, req_metrics,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
+    def get_runtime_trace(data_f, ts):
+        """
+        Returns a DataFrame with all trace data from
+        `data_f` extrapolated from timestamps `ts`
+        """
+        def rm_duplicates(df):
+            """
+            Returns a copy of `df` removing duplicated (by index) rows.
+            """
+            return df[~df.index.duplicated(keep='first')]
+
+        return (pd.concat([data_f, pd.Series(ts, index=ts)])
+                .sort_index()
+                .drop(0, axis=1)
+                .interpolate(method='bfill', limit_area='inside')
+                .pipe(rm_duplicates)
+                )
 
     df = (filter_by_job_step_app(read_data(filename),
                                  job_id=job_id,
@@ -165,17 +182,20 @@ def runtime(filename, mtrcs, req_metrics,
           )
 
     # Prepare x-axe range for iterations captured
-    x_sampl = np.linspace(min(df.index.values),
-                          max(df.index.values), dtype=int)
-    extent = [x_sampl[0]-(x_sampl[1]-x_sampl[0])//2,
-              x_sampl[-1]+(x_sampl[1]-x_sampl[0])//2, 0, 1]
+    uniform_time_stamps = np.linspace(min(df.index.values),
+                                      max(df.index.values), dtype=int)
+    extent = [uniform_time_stamps[0] -
+              (uniform_time_stamps[1] - uniform_time_stamps[0]) // 2,
+              uniform_time_stamps[-1] +
+              (uniform_time_stamps[1] - uniform_time_stamps[0]) // 2,
+              0, 1]
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        # Filling missing values with the next known value
-        m_data = df[metric_name].interpolate(method='bfill',
-                                             limit_area='inside')
+        m_data = (df[metric_name]
+                  .interpolate(method='bfill', limit_area='inside')
+                  .pipe(get_runtime_trace, ts=uniform_time_stamps))
 
         m_data_array = m_data.values.transpose()
 
@@ -193,11 +213,11 @@ def runtime(filename, mtrcs, req_metrics,
         # Switch below lines in order to apply the specific metric range
         # 1: config range
         # 2: data max min range
-        norm = mtrcs.get_metric(metric).norm_func()
-        # norm = Normalize(vmin=np.nanmin(m_data_array),
-        #                  vmax=np.nanmax(m_data_array), clip=True)
-        # print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
-        #       f'{np.nanmax(m_data_array)}) for {metric_name}')
+        # norm = mtrcs.get_metric(metric).norm_func()
+        norm = Normalize(vmin=np.nanmin(m_data_array),
+                         vmax=np.nanmax(m_data_array), clip=True)
+        print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
+              f'{np.nanmax(m_data_array)}) for {metric_name}')
 
         for i, _ in enumerate(m_data_array):
             axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
@@ -218,7 +238,7 @@ def runtime(filename, mtrcs, req_metrics,
             cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
             cax=col_bar_ax)
 
-        if show:
+        if not save:
             plt.show()
             plt.pause(0.001)
         else:
@@ -248,7 +268,7 @@ def runtime_parser_action_closure(metrics):
         """ Action for `recursive` subcommand """
         print(args)
         runtime(args.input_file, metrics, args.metrics,
-                args.show, args.title, args.jobid, args.stepid, args.output)
+                args.save, args.title, args.jobid, args.stepid, args.output)
 
     return run_parser_action
 
@@ -256,7 +276,7 @@ def runtime_parser_action_closure(metrics):
 def res_parser_action(args):
     """ Action for `resume` subcommand """
     resume(args.input_file, args.base_freq, args.app_name,
-           args.jobid, args.show, args.output, args.title)
+           args.jobid, args.save, args.output, args.title)
 
 
 def build_parser(metrics):
