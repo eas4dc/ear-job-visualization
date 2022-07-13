@@ -114,7 +114,20 @@ To see the performance and efficiency of the test, one can type:
 
 Therefore it obtains:
 
-![alt text](examples/imgs/vasp-1218623-policies-resume.png)
+<div align="center">
+  <img src="extra/examples/imgs/vasp-1218623-policies-resume.png" width="50%">
+</div>
+
+Note that on the above graph there is some configuration running the application using *monitoring* with a *base_freq* of 2.601 GHz.
+This means that the test was run setting the Turbo CPU frequency for those nodes.
+
+This is why the command requires the user to use the *base_freq* argument, because it becomes more flexible to compare configurations as now you can compare different *monitoring* tests (i.e., tests with different fixed CPU frequencies) with one reference monitoring test with CPU frequency fixed at *base_freq*. For example, you can see the performance of the previous application not applying any EAR optimisation policy but fixing default CPU frequency and compare it with a test where the application ran at Turbo, by typing:
+
+`put python command`
+
+`put the image vs. turbo`
+
+and you can conclude that this appliction get no benefit (in terms of energy efficiency) by running it at Turbo frequency.
 
 ### runtime
 
