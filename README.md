@@ -165,7 +165,7 @@ Note that the accepted metrics by your **ear-analytics** installation must be sp
 The resulting figure (for each *--metric* specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualization about the value of the metric each figure is showing.
 All nodes visualized share the same timeline, which makes this command useful to check the application behaviour over all of them.
 
-### Configuration
+#### Configuration
 
 **ear-analytics** works with a configuration file called *config.ini*. You can modify the template given in this repository.
 By now, this configuration file only lets you specify which metrics will be accepted by **ear-analytics** and for which range of values will work each one based on the architecture you are working (only useful if you run the command with `--absolute-range` argument).
