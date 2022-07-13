@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
-from matplotlib.gridspec import GridSpec
+from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 import colorcet as cc
 
 from common.io_api import read_data, read_ini
@@ -146,8 +146,9 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         plt.savefig(fname=name, bbox_inches='tight')
 
 
-def runtime(filename, mtrcs, req_metrics,
-            save=False, title=None, job_id=None, step_id=None, output=None):
+def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
+            title=None, job_id=None, step_id=None, output=None,
+            horizontal_legend=False):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -162,7 +163,7 @@ def runtime(filename, mtrcs, req_metrics,
         """
         def rm_duplicates(df):
             """
-            Returns a copy of `df` removing duplicated (by index) rows.
+            Returns a copy of `df` removing duplicated (index) rows.
             """
             return df[~df.index.duplicated(keep='first')]
 
@@ -207,20 +208,30 @@ def runtime(filename, mtrcs, req_metrics,
             tit = f'{title}: {metric_name}'
         fig.suptitle(tit, y=0.93, size=22, weight='bold')
 
-        grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                           width_ratios=(9.5, 0.5), hspace=0, wspace=0.04)
+        # We use a grid layout to easily insert the gradient legend
+        if not horizontal_legend:
+            grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
+                               width_ratios=(9.5, 0.5), hspace=0, wspace=0.04)
+        else:
+            grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1, hspace=1)
 
-        # Switch below lines in order to apply the specific metric range
-        # 1: config range
-        # 2: data max min range
-        # norm = mtrcs.get_metric(metric).norm_func()
-        norm = Normalize(vmin=np.nanmin(m_data_array),
-                         vmax=np.nanmax(m_data_array), clip=True)
-        print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
-              f'{np.nanmax(m_data_array)}) for {metric_name}')
+            gs1 = GridSpecFromSubplotSpec(len(m_data_array), 1,
+                                          subplot_spec=grid_sp[0:-1])
+            gs2 = GridSpecFromSubplotSpec(1, 1, subplot_spec=grid_sp[-1])
+
+        norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
+        if rel_range:  # Relative range
+            norm = Normalize(vmin=np.nanmin(m_data_array),
+                             vmax=np.nanmax(m_data_array), clip=True)
+            print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
+                  f'{np.nanmax(m_data_array)}) for {metric_name}')
 
         for i, _ in enumerate(m_data_array):
-            axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
+            if not horizontal_legend:
+                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
+            else:
+                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i])
+
             axes.set_yticks([])
             axes.set_ylabel(axes.get_ylabel(), rotation=0, labelpad=50)
 
@@ -233,10 +244,17 @@ def runtime(filename, mtrcs, req_metrics,
             if i < len(m_data_array) - 1:
                 axes.set_xticklabels([])
 
-        col_bar_ax = fig.add_subplot(grid_sp[:, 1])
-        fig.colorbar(cm.ScalarMappable(
-            cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-            cax=col_bar_ax)
+        if horizontal_legend:
+            plt.subplots_adjust(hspace=0.0)
+            col_bar_ax = fig.add_subplot(gs2[0, 0])
+            fig.colorbar(cm.ScalarMappable(
+                cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
+                cax=col_bar_ax, orientation="horizontal")
+        else:
+            col_bar_ax = fig.add_subplot(grid_sp[:, 1])
+            fig.colorbar(cm.ScalarMappable(
+                cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
+                cax=col_bar_ax)
 
         if not save:
             plt.show()
@@ -267,7 +285,7 @@ def runtime_parser_action_closure(metrics):
     def run_parser_action(args):
         """ Action for `recursive` subcommand """
         print(args)
-        runtime(args.input_file, metrics, args.metrics,
+        runtime(args.input_file, metrics, args.metrics, args.relative_range,
                 args.save, args.title, args.jobid, args.stepid, args.output)
 
     return run_parser_action
@@ -341,6 +359,19 @@ def build_parser(metrics):
     parser_run.add_argument('-s', '--stepid', type=int,
                             help='Sets the STEP ID of the job you are working'
                             ' with.')
+
+    group_2 = parser_run.add_mutually_exclusive_group()
+    group_2.add_argument('-r', '--relative_range', action='store_true',
+                         help='Use the relative range of a metric over the '
+                         'trace data to build the gradient.')
+    group_2.add_argument('--absolute-range', action='store_true',
+                         help='Use the absolute range configured for metrics '
+                         'to build the gradient (default).')
+
+    parser_run.add_argument('-l', '--horizontal_legend', action='store_true',
+                            help='Display the legend horizontally. This option'
+                            ' is useful when your trace has a low number of'
+                            ' nodes.')
 
     parser_run.add_argument('-m', '--metrics', nargs='+',
                             choices=list(metrics.metrics.keys()),

@@ -23,14 +23,14 @@ You can install the requirements directly or use the *requirements.txt* file giv
 `$ git clone`
 
 ```
-$ python3 -m pip install -U pip
-$ python3 -m pip install -r requirements.txt
+$ python -m pip install -U pip
+$ python -m pip install -r requirements.txt
 ```
 
 #### Using a virtual environment
 
 ```
-$ python3 -m venv env_name
+$ python -m venv env_name
 $ source env_name/bin/activate
 (env_name) $ python -m pip install -U pip
 (env_name) $ python -m pip install -r requirements.txt
@@ -44,7 +44,7 @@ $ source env_name/bin/activate
 If you are using a [virtual environment](#using-a-virtual-environment) remember to activate it.
 
 ```
-$ python3 ear_analytics.py -h
+$ python ear_analytics.py -h
 usage: ear_analytics [-h] [--version] [--save | --show] [-t TITLE] [-o OUTPUT]
                      [-j JOBID]
                      input_file {runtime,resume} ...
@@ -84,7 +84,7 @@ Then you must provide which sub-command you want to invoke. There are two option
 ### resume
 
 ```
-$ [ovidal@localhost ear-analytics]$ python3 ear_analytics.py dummy resume -h
+$ [ovidal@localhost ear-analytics]$ python ear_analytics.py dummy resume -h
 usage: ear_analytics input_file resume [-h] [--app_name APP_NAME] base_freq
 
 positional arguments:
@@ -110,7 +110,7 @@ Note that if your *input_file* contains resume information of multiple apps or j
 The file in `examples/vasp-policy-comparison/vasp-1218623-policies-resume.csv` directory contain perfomance metrics of executing VASP-Asis application on Snellius supercomputer under EAR policies. This file was obtained typing `eacct -j 1218623 -l -c vasp-1218623-policies-resume.csv`.
 To see the performance and efficiency of the test, one can type:
 
-`$ python ear_analytics.py -t "VASP: EAR policies performance and Power affectation" /examples/vasp-policy-comparison/vasp-1218623-policies-resume.csv resume 2.6`
+`$ python ear_analytics.py -t "VASP: EAR policies performance and Power affectation" extra/examples/vasp-policy-comparison/vasp-1218623-policies-resume.csv resume 2.6`
 
 Therefore it obtains:
 
@@ -123,27 +123,32 @@ This means that the test was run setting the Turbo CPU frequency for those nodes
 
 This is why the command requires the user to use the *base_freq* argument, because it becomes more flexible to compare configurations as now you can compare different *monitoring* tests (i.e., tests with different fixed CPU frequencies) with one reference monitoring test with CPU frequency fixed at *base_freq*. For example, you can see the performance of the previous application not applying any EAR optimisation policy but fixing default CPU frequency and compare it with a test where the application ran at Turbo, by typing:
 
-`put python command`
+`$ python ear_analytics.py -t "VASP: Fixed P-State efficiency comparison" extra/examples/vasp-policy-comparison/vasp-fixed_freqs-resume.csv resume 2.601`
 
-`put the image vs. turbo`
+you get:
+
+<div align="center">
+  <img src="extra/examples/imgs/vasp-1218652-vs_turbo.png" width="50%">
+</div>
 
 and you can conclude that this appliction get no benefit (in terms of energy efficiency) by running it at Turbo frequency.
 
 ### runtime
 
 ```
-$ python3 ear_analytics.py dumy runtime --help
+python ear_analytics.py dummy runtime --help
 usage: ear_analytics input_file runtime [-h] [-s STEPID] -m
-                                        {cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi}
-                                        [{cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi} ...]
+                                        {cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq}
+                                        [{cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq} ...]
 
 optional arguments:
   -h, --help                            show this help message and exit
   -s, --stepid STEPID                   Sets the STEP ID of the job you are
                                         working with.
-  -m, --metrics {cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi} [{cpi,gflops,avg.cpufreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi} ...]
+  -m, --metrics {cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq} [{cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq} ...]
                                         Specify which metrics you want to
                                         visualize.
+
 ```
 
 Generate a heatmap-based graph for each metric specified by *--metrics* argument.
