@@ -320,7 +320,7 @@ def build_parser(metrics):
                                      description='High level support for read '
                                      'and visualize information files given by'
                                      ' EARL.', formatter_class=formatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 3.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 3.1')
     parser.add_argument('input_file', help='Specifies the input file(s) name(s'
                         ') to read data from.')
 
@@ -373,10 +373,19 @@ def build_parser(metrics):
                             ' is useful when your trace has a low number of'
                             ' nodes.')
 
+    parser_run.add_argument('-m', '--metrics', nargs='+', required=True,
+                            choices=list(metrics.metrics.keys()),
+                            help='Space separated list of case sensitive'
+                            ' metrics names to visualize. Allowed values are '
+                            + ', '.join(metrics.metrics.keys()),
+                            metavar='metric')
+    """
     parser_run.add_argument('-m', '--metrics', nargs='+',
                             choices=list(metrics.metrics.keys()),
-                            required=True, help='Specify which metrics you wan'
-                            't to visualize.')
+                            required=True, help='Specify which metrics you'
+                            'want to visualize. The accepted ones are '
+                            + ', '.join(list(metrics.metrics.keys())), metavar='')
+    """
 
     parser_run.set_defaults(func=runtime_parser_action_closure(metrics))
 

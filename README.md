@@ -136,29 +136,45 @@ and you can conclude that this appliction get no benefit (in terms of energy eff
 ### runtime
 
 ```
-python ear_analytics.py dummy runtime --help
-usage: ear_analytics input_file runtime [-h] [-s STEPID] -m
-                                        {cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq}
-                                        [{cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq} ...]
+$ python ear_analytics.py dummy runtime -h
+usage: ear_analytics input_file runtime [-h] [-s STEPID] [-r | --absolute-range]
+                                        [-l] -m metric [metric ...]
 
 optional arguments:
-  -h, --help                            show this help message and exit
-  -s, --stepid STEPID                   Sets the STEP ID of the job you are
-                                        working with.
-  -m, --metrics {cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq} [{cpi,gflops,avg.cpufreq,avg.imcfreq,tpi,gbs,dc-node-power,dram-power,pck-power,p.mpi,gutil0,gmemutil0,io_mbs,def.freq} ...]
-                                        Specify which metrics you want to
-                                        visualize.
-
+  -h, --help                         show this help message and exit
+  -s, --stepid STEPID                Sets the STEP ID of the job you are working
+                                     with.
+  -r, --relative_range               Use the relative range of a metric over the
+                                     trace data to build the gradient.
+  --absolute-range                   Use the absolute range configured for
+                                     metrics to build the gradient (default).
+  -l, --horizontal_legend            Display the legend horizontally. This
+                                     option is useful when your trace has a low
+                                     number of nodes.
+  -m, --metrics metric [metric ...]  Space separated list of case sensitive
+                                     metrics names to visualize. Allowed values
+                                     are cpi, gflops, avg.cpufreq, avg.imcfreq,
+                                     tpi, gbs, dc-node-power, dram-power, pck-
+                                     power, p.mpi, gutil0, gmemutil0, io_mbs,
+                                     def.freq
 ```
 
 Generate a heatmap-based graph for each metric specified by *--metrics* argument.
 Note that the accepted metrics by your **ear-analytics** installation must be specified in the [configuration](#configuration) file.
 
-The resulting figure (for each *--metric* specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualization about the value of the metric each figure is showing. All nodes visualized share the same timeline, which makes this command useful to check the application behaviour across all of them.
+The resulting figure (for each *--metric* specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualization about the value of the metric each figure is showing.
+All nodes visualized share the same timeline, which makes this command useful to check the application behaviour over all of them.
+
+### Configuration
+
+**ear-analytics** works with a configuration file called *config.ini*. You can modify the template given in this repository.
+By now, this configuration file only lets you specify which metrics will be accepted by **ear-analytics** and for which range of values will work each one based on the architecture you are working (only useful if you run the command with `--absolute-range` argument).
+Note that all metrics you specify must be reported before by [eacct](https://gitlab.bsc.es/ear_team/ear/-/wikis/Commands#energy-account-eacct) command or by metrics plugin specified by SLURM\_EAR\_REPORT\_ADD environment variable,
+and each metric name must be the same as it is reported in the header of the generated files.
 
 #### Example
 
-The next table shows content of extra/examples/bt\_test\_loops file, which content output information of all loops recorded by EAR during the execution of a BT kernel configure to be executed with 160 MPI processes accross 4 nodes. We will visualize the CPI, GFLOPS and the percentage of time spent in MPI blocking calls reported by EAR for each of the 4 nodes this kernel was executed.
+The next table shows content of `TODO` file, which content output information of all loops recorded by EAR during the execution of `TODO: application name` configured to be executed with `TODO` MPI processes accross `TODO` nodes. We will visualize the CPI, GFLOPS and the percentage of time spent in MPI calls reported by EAR for each node this application was executed.
 
 ![alt text](examples/pop_loops_table.png)
 
@@ -172,14 +188,6 @@ We get the following images:
 ![alt text](extra/examples/bt_test_runtime/runtime_GFLOPS.jpg)
 ![alt text](extra/examples/bt_test_runtime/runtime_P.MPI.jpg)
 
-### Configuration
-
-**ear-analytics** works with a configuration file called *config.ini*. You can modify the template given in this repository.
-By now, this configuration file only lets you specify which metrics will be accepted by **ear-analytics** and for which range of values will work each one based on the architecture you are working.
-Note that all metrics you specify must be reported before by [eacct](https://gitlab.bsc.es/ear_team/ear/-/wikis/Commands#energy-account-eacct) command or by metrics plugin specified by SLURM\_EAR\_REPORT\_ADD environment variable,
-and each metric name must be the same as it is reported in the header of the generated files.
-
-For more information about why specify metrics configuration, read [runtime](#runtime) sub-command section.
 
 ## Contact
 
