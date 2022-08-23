@@ -7,6 +7,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -14,7 +15,7 @@ import colorcet as cc
 
 from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
-from common.utils import filter_by_job_step_app
+from common.utils import filter_df
 
 
 def resume(filename, base_freq, app_id=None, job_id=None,
@@ -50,8 +51,12 @@ def resume(filename, base_freq, app_id=None, job_id=None,
                 )
 
     # Filter rows and pre-process data
-    data_f = preprocess_df(filter_by_job_step_app(read_data(filename),
-                           job_id=job_id, app_id=app_id))
+    data_f = (read_data(filename)
+              .pipe(filter_df, JOB_ID=job_id, APP_ID=app_id)  # Filter rows
+              .pipe(preprocess_df)
+              )
+    # data_f = preprocess_df(filter_by_job_step_app(read_data(filename),
+    #                        job_id=job_id, app_id=app_id))
 
     # Compute per step energy consumed
     energy_sums = (data_f
@@ -156,15 +161,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
+    """
     def get_runtime_trace(data_f, ts):
-        """
         Returns a DataFrame with all trace data from
         `data_f` extrapolated from timestamps `ts`
-        """
         def rm_duplicates(df):
-            """
             Returns a copy of `df` removing duplicated (index) rows.
-            """
             return df[~df.index.duplicated(keep='first')]
 
         return (pd.concat([data_f, pd.Series(ts, index=ts)])
@@ -181,8 +183,15 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
           .groupby(['NODENAME', 'TIMESTAMP'])
           .agg(lambda x: x).unstack(level=0)
           )
+    """
+    df = (read_data(filename)
+          .pipe(filter_df, JOBID=job_id, STEPID=step_id)
+          .groupby(['NODENAME', 'TIMESTAMP'])
+          .agg(lambda x: x).unstack(level=0)
+          )
 
     # Prepare x-axe range for iterations captured
+    """
     uniform_time_stamps = np.linspace(min(df.index.values),
                                       max(df.index.values), dtype=int)
     extent = [uniform_time_stamps[0] -
@@ -190,13 +199,21 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
               uniform_time_stamps[-1] +
               (uniform_time_stamps[1] - uniform_time_stamps[0]) // 2,
               0, 1]
+    """
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
+        """
         m_data = (df[metric_name]
                   .interpolate(method='bfill', limit_area='inside')
                   .pipe(get_runtime_trace, ts=uniform_time_stamps))
+        """
+        m_data = df[df.filter(regex=metric_name).columns]
+        m_data.columns = m_data.columns.to_flat_index()
+        m_data.index = pd.to_datetime(m_data.index, unit='s')
+        m_data = m_data.resample('10S').bfill().bfill()
+        x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
 
         m_data_array = m_data.values.transpose()
 
@@ -238,8 +255,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             data = np.array(m_data_array[i], ndmin=2)
 
             axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                        norm=norm, aspect='auto', extent=extent)
-            axes.set_xlim(extent[0], extent[1])
+                        norm=norm, aspect='auto',
+                        extent=[x_lim[0], x_lim[1], 0, 1])
+            axes.set_xlim(x_lim[0], x_lim[1])
+
+            date_format = mdates.DateFormatter('%x: %H:%M:%S')
+            axes.xaxis.set_major_formatter(date_format)
 
             if i < len(m_data_array) - 1:
                 axes.set_xticklabels([])
@@ -276,6 +297,10 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             plt.savefig(fname=name, bbox_inches='tight')
 
 
+def ear2prv():
+    return 0
+
+
 def runtime_parser_action_closure(metrics):
     """
     Closure function used to return the action
@@ -284,7 +309,6 @@ def runtime_parser_action_closure(metrics):
 
     def run_parser_action(args):
         """ Action for `recursive` subcommand """
-        print(args)
         runtime(args.input_file, metrics, args.metrics, args.relative_range,
                 args.save, args.title, args.jobid, args.stepid, args.output)
 
@@ -379,13 +403,6 @@ def build_parser(metrics):
                             ' metrics names to visualize. Allowed values are '
                             + ', '.join(metrics.metrics.keys()),
                             metavar='metric')
-    """
-    parser_run.add_argument('-m', '--metrics', nargs='+',
-                            choices=list(metrics.metrics.keys()),
-                            required=True, help='Specify which metrics you'
-                            'want to visualize. The accepted ones are '
-                            + ', '.join(list(metrics.metrics.keys())), metavar='')
-    """
 
     parser_run.set_defaults(func=runtime_parser_action_closure(metrics))
 

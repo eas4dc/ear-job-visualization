@@ -1,6 +1,16 @@
 """ Util functions. """
 
+import numpy as np
 import pandas as pd
+
+
+def filter_df(data_f, **kwargs):
+    try:
+        return data_f[np.logical_and.reduce([data_f[k] == v
+                      for k, v in kwargs.items() if v is not None])]
+    except KeyError:
+        print(f'Data filter failed. Your filters are {kwargs.values()} and '
+              f'your data columns are {data_f.columns()}')
 
 
 def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
