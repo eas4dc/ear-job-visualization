@@ -52,7 +52,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
 
     # Filter rows and pre-process data
     data_f = (read_data(filename)
-              .pipe(filter_df, JOB_ID=job_id, APP_ID=app_id)  # Filter rows
+              .pipe(filter_df, JOBID=job_id, APP_ID=app_id)  # Filter rows
               .pipe(preprocess_df)
               )
     # data_f = preprocess_df(filter_by_job_step_app(read_data(filename),
@@ -110,11 +110,17 @@ def resume(filename, base_freq, app_id=None, job_id=None,
     elif app_id:
         tit = app_id + f' vs. {base_freq} GHz'
 
-    axes = results.plot(kind='bar', figsize=(12.8, 9.6),
-                        rot=30, legend=False, fontsize=20)
-    axes.set_xlabel('POLICY, def. Freq (GHz)', fontsize=20)
+    # plt.rc('font', family='serif')
+    # plt.rc('xtick', labelsize='x-small')
+    # plt.rc('ytick', labelsize='x-small')
 
-    plt.gcf().suptitle(tit, fontsize='22', weight='bold')
+    axes = results.plot(kind='bar', figsize=(8, 6),
+                        rot=0, legend=False)  # , fontsize=20)
+    axes.set_xlabel('POLICY, def. Freq (GHz)')  # , fontsize=20)
+    axes.set_title(tit, loc='center', wrap=True, pad=10.0, weight='bold')
+    plt.tight_layout()
+
+    # plt.gcf().suptitle(tit)  # , fontsize='22', weight='bold')
 
     # ax2 = axes.twinx()
     # freqs.plot(ax=ax2,  ylim=(0, 3.5), color=['cyan', 'purple'],
@@ -127,7 +133,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
 
     # axes.legend(handles_1 + handles_2,
     # labels_1 + labels_2, loc=0, fontsize=15)
-    axes.legend(handles_1, labels_1, loc=0, fontsize=15)
+    axes.legend(handles_1, labels_1, loc=0)  # , fontsize=15)
 
     # Plot a grid
     plt.grid(axis='y', ls='--', alpha=0.5)
@@ -141,7 +147,7 @@ def resume(filename, base_freq, app_id=None, job_id=None,
         height = rect.get_height()
         axes.text(rect.get_x() + rect.get_width() / 2,
                   height + 0.1, '{:.2f}%'.format(label),
-                  ha='center', va='bottom', fontsize=12)
+                  ha='center', va='bottom')  # , fontsize=12)
     if not save:
         plt.show()
     else:
@@ -245,12 +251,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
         for i, _ in enumerate(m_data_array):
             if not horizontal_legend:
-                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
+                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i][1])
             else:
-                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i])
+                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i][1])
 
             axes.set_yticks([])
-            axes.set_ylabel(axes.get_ylabel(), rotation=0, labelpad=50)
+            axes.set_ylabel(axes.get_ylabel(), rotation=0, labelpad=55, weight='bold')
 
             data = np.array(m_data_array[i], ndmin=2)
 
@@ -310,7 +316,8 @@ def runtime_parser_action_closure(metrics):
     def run_parser_action(args):
         """ Action for `recursive` subcommand """
         runtime(args.input_file, metrics, args.metrics, args.relative_range,
-                args.save, args.title, args.jobid, args.stepid, args.output)
+                args.save, args.title, args.jobid, args.stepid, args.output,
+                args.horizontal_legend)
 
     return run_parser_action
 

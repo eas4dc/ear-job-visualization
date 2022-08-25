@@ -1,16 +1,20 @@
 """ Util functions. """
 
-import numpy as np
 import pandas as pd
 
 
 def filter_df(data_f, **kwargs):
-    try:
-        return data_f[np.logical_and.reduce([data_f[k] == v
-                      for k, v in kwargs.items() if v is not None])]
-    except KeyError:
-        print(f'Data filter failed. Your filters are {kwargs.values()} and '
-              f'your data columns are {data_f.columns()}')
+    """
+    Filters the DataFrame `data_f`. **kwargs keys indicate the DataFrame
+    columns you want to filter by, and keys are values.
+    """
+
+    expr = ' and '.join([f'{k} == @kwargs.get("{k}")'
+                         for k in kwargs if kwargs[k] is not None])
+    if expr == '':
+        return data_f
+
+    return data_f.query(expr)
 
 
 def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
