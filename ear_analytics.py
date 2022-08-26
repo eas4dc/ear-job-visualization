@@ -194,6 +194,18 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
           .pipe(filter_df, JOBID=job_id, STEPID=step_id)
           .groupby(['NODENAME', 'TIMESTAMP'])
           .agg(lambda x: x).unstack(level=0)
+          .assign(
+                avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
+                tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
+                avg_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').mean(axis=1),
+                tot_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').sum(axis=1),
+                avg_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d').mean(axis=1),
+                tot_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d').sum(axis=1),
+                avg_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').mean(axis=1),
+                tot_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').sum(axis=1),
+                avg_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d').mean(axis=1),
+                tot_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d').sum(axis=1),
+              )
           )
 
     # Prepare x-axe range for iterations captured
@@ -218,18 +230,18 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         m_data = df[df.filter(regex=metric_name).columns]
         m_data.columns = m_data.columns.to_flat_index()
         m_data.index = pd.to_datetime(m_data.index, unit='s')
-        m_data = m_data.resample('10S').bfill().bfill()
-        x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
+
+        new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
+                                freq='10S').union(m_data.index)
+
+        m_data = m_data.reindex(new_idx).bfill()
 
         m_data_array = m_data.values.transpose()
 
-        # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[20.4, 0.5 * len(m_data.columns) * 2])
+        x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
 
-        tit = metric_name
-        if title is not None:
-            tit = f'{title}: {metric_name}'
-        fig.suptitle(tit, y=0.93, size=22, weight='bold')
+        # Create the resulting figure for current metric
+        fig = plt.figure(figsize=[19.2, 1 * len(m_data.columns) * 2])
 
         # We use a grid layout to easily insert the gradient legend
         if not horizontal_legend:
@@ -251,12 +263,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
         for i, _ in enumerate(m_data_array):
             if not horizontal_legend:
-                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i][1])
+                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
             else:
-                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i][1])
+                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i])
 
             axes.set_yticks([])
-            axes.set_ylabel(axes.get_ylabel(), rotation=0, labelpad=55, weight='bold')
+            axes.set_ylabel(axes.get_ylabel(), rotation=0, weight='bold', labelpad=85)
 
             data = np.array(m_data_array[i], ndmin=2)
 
@@ -267,6 +279,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
             date_format = mdates.DateFormatter('%x: %H:%M:%S')
             axes.xaxis.set_major_formatter(date_format)
+
+            if i == 0:
+                tit = metric_name
+                if title is not None:
+                    tit = f'{title}: {metric_name}'
+                axes.set_title(tit, weight='bold')
 
             if i < len(m_data_array) - 1:
                 axes.set_xticklabels([])
