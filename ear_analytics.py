@@ -211,7 +211,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
 
         # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[19.2, 1 * len(m_data.columns) * 2])
+        fig = plt.figure(figsize=[19.2, 1 * len(m_data.columns)])
 
         # We use a grid layout to easily insert the gradient legend
         if not horizontal_legend:
@@ -231,15 +231,27 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             # print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
             #       f'{np.nanmax(m_data_array)}) for {metric_name}')
 
+        # Check if the requested metric is per GPU
+        gpu_metric_regex_str = r'(GFREQ|GUTIL|GFREQ|GMEMFREQ|GMEMUTIL)(\d)'
+        gpu_metric_regex = re.compile(gpu_metric_regex_str)
+        gpu_metric_match = gpu_metric_regex.search(metric_name)
+
         for i, _ in enumerate(m_data_array):
-            if not horizontal_legend:
-                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
+
+            if gpu_metric_match:
+                ylabel_text = (f'GPU{gpu_metric_match.group(2)}'
+                               f' @ {m_data.columns[i][1]}')
             else:
-                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i])
+                ylabel_text = m_data.columns[i][1]
+
+            if not horizontal_legend:
+                axes = fig.add_subplot(grid_sp[i, 0], ylabel=ylabel_text)
+            else:
+                axes = fig.add_subplot(gs1[i], ylabel=ylabel_text)
 
             axes.set_yticks([])
-            axes.set_ylabel(axes.get_ylabel(), rotation=0,
-                            weight='bold', labelpad=85)
+            axes.set_ylabel(ylabel_text, rotation=0,
+                            weight='bold', labelpad=len(ylabel_text) * 4)
 
             data = np.array(m_data_array[i], ndmin=2)
 
@@ -311,10 +323,10 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
           .pipe(filter_df, JOBID=job_id, STEPID=step_id)
           .merge(df_job)
           .assign(
-              CPI=lambda df: df.CPI * 1000000,
+              CPI=lambda df: df.CPI * 1000000,  # Paraver needs values > 0
               ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,
               IO_MBS=lambda df: df.IO_MBS * 1000000,
-              time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000
+              time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000  # (us)
               )
           .join(pd.Series(dtype=np.int64, name='task_id'))
           .join(pd.Series(dtype=np.int64, name='app_id'))
@@ -581,9 +593,6 @@ def build_parser(metrics):
                         ' Only valid if `--save` flag is set.')
     parser.add_argument('-j', '--jobid', type=int,
                         help='Filter the data by the Job ID.')
-    # parser.add_argument('-v', '--verbosity', action="count",
-    #                     help="increase output verbosity"
-    #                     "(e.g., -vv is more than -v)")
 
     subparsers = parser.add_subparsers(help='Functionalities currently'
                                        ' supported by this program.',
