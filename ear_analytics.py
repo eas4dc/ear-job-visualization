@@ -170,31 +170,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
-    """
-    def get_runtime_trace(data_f, ts):
-        Returns a DataFrame with all trace data from
-        `data_f` extrapolated from timestamps `ts`
-        def rm_duplicates(df):
-            Returns a copy of `df` removing duplicated (index) rows.
-            return df[~df.index.duplicated(keep='first')]
-
-        return (pd.concat([data_f, pd.Series(ts, index=ts)])
-                .sort_index()
-                .drop(0, axis=1)
-                .interpolate(method='bfill', limit_area='inside')
-                .pipe(rm_duplicates)
-                )
-
-    df = (filter_by_job_step_app(read_data(filename),
-                                 job_id=job_id,
-                                 step_id=step_id
-                                 )
-          .groupby(['NODENAME', 'TIMESTAMP'])
-          .agg(lambda x: x).unstack(level=0)
-          )
-    """
     df = (read_data(filename)
-          .pipe(filter_df, JOBID=job_id, STEPID=step_id)
+          .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
           .groupby(['NODENAME', 'TIMESTAMP'])
           .agg(lambda x: x).unstack(level=0)
           .assign(
@@ -202,34 +179,24 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
                 avg_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').mean(axis=1),
                 tot_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').sum(axis=1),
-                avg_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d').mean(axis=1),
-                tot_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d').sum(axis=1),
+                avg_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d')
+                .mean(axis=1),
+                tot_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d')
+                .sum(axis=1),
                 avg_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').mean(axis=1),
                 tot_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').sum(axis=1),
-                avg_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d').mean(axis=1),
-                tot_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d').sum(axis=1),
+                avg_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d')
+                .mean(axis=1),
+                tot_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d')
+                .sum(axis=1),
               )
           )
 
     # Prepare x-axe range for iterations captured
-    """
-    uniform_time_stamps = np.linspace(min(df.index.values),
-                                      max(df.index.values), dtype=int)
-    extent = [uniform_time_stamps[0] -
-              (uniform_time_stamps[1] - uniform_time_stamps[0]) // 2,
-              uniform_time_stamps[-1] +
-              (uniform_time_stamps[1] - uniform_time_stamps[0]) // 2,
-              0, 1]
-    """
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        """
-        m_data = (df[metric_name]
-                  .interpolate(method='bfill', limit_area='inside')
-                  .pipe(get_runtime_trace, ts=uniform_time_stamps))
-        """
         m_data = df[df.filter(regex=metric_name).columns]
         m_data.columns = m_data.columns.to_flat_index()
         m_data.index = pd.to_datetime(m_data.index, unit='s')
@@ -271,7 +238,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i])
 
             axes.set_yticks([])
-            axes.set_ylabel(axes.get_ylabel(), rotation=0, weight='bold', labelpad=85)
+            axes.set_ylabel(axes.get_ylabel(), rotation=0,
+                            weight='bold', labelpad=85)
 
             data = np.array(m_data_array[i], ndmin=2)
 

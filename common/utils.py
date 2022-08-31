@@ -10,7 +10,8 @@ def filter_df(data_f, **kwargs):
     """
 
     expr = ' and '.join([f'{k} == @kwargs.get("{k}")'
-                         for k in kwargs if kwargs[k] is not None])
+                         for k in kwargs if kwargs[k] is not None
+                         and k in data_f.columns])
     if expr == '':
         return data_f
 
