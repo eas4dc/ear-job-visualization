@@ -218,7 +218,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
 
         # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[19.2, 1 * len(m_data.columns)])
+        fig = plt.figure(figsize=[19.2, 0.5 * len(m_data.columns)])
 
         # We use a grid layout to easily insert the gradient legend
         if not horizontal_legend:
