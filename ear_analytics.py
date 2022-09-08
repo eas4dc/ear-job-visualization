@@ -170,10 +170,15 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
+
+    def join_metric_node(df):
+        df.columns = df.columns.to_flat_index()
+        return df
+
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-          .groupby(['NODENAME', 'TIMESTAMP'])
-          .agg(lambda x: x).unstack(level=0)
+          # .groupby(['NODENAME', 'TIMESTAMP'])
+          # .agg(lambda x: x).unstack(level=0)
           .assign(
                 avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
                 tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
@@ -197,8 +202,10 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        m_data = df[df.filter(regex=metric_name).columns]
-        m_data.columns = m_data.columns.to_flat_index()
+        metric_filter = df.filter(regex=metric_name).columns
+
+        m_data = df.pivot_table(values=metric_filter, index='TIMESTAMP', columns='NODENAME').bfill().pipe(join_metric_node)
+        # m_data.columns = m_data.columns.to_flat_index()
         m_data.index = pd.to_datetime(m_data.index, unit='s')
 
         new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
@@ -234,9 +241,9 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         # Check if the requested metric is per GPU
         gpu_metric_regex_str = r'(GFREQ|GUTIL|GFREQ|GMEMFREQ|GMEMUTIL)(\d)'
         gpu_metric_regex = re.compile(gpu_metric_regex_str)
-        gpu_metric_match = gpu_metric_regex.search(metric_name)
 
         for i, _ in enumerate(m_data_array):
+            gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
 
             if gpu_metric_match:
                 ylabel_text = (f'GPU{gpu_metric_match.group(2)}'
