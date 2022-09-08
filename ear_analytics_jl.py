@@ -540,13 +540,40 @@ def prv_parser_action(args):
     ear2prv(out_jobs_path, args.input_file, job_id=args.jobid,
             step_id=args.step_id, output_fn=args.output)
 
-def eacct_parser_action(args):
-    """ Action performing eacct command and storing csv files """
-    eacct(args.format, args.jobid, args.stepid)
 
-def build_parser(metrics):
+def parser_action_closure(conf_metrics):
+
+    def parser_action(args):
+        print("in parser_action:\n",args)
+
+        csv_generated = False
+
+        if args.input_file == None:
+            # Action performing eacct command and storing csv files
+            input_file = eacct(args.format, args.jobid, args.stepid)
+            args.input_file = input_file
+            csv_generated = True
+
+        if args.format == "runtime" :
+            print("args input_file = ", args.input_file)
+            runtime(args.input_file, conf_metrics, args.metrics, args.relative_range,
+            args.save, args.title, args.jobid, args.stepid, args.output,
+            args.horizontal_legend)
+
+        if args.format == "rear2prv" :
+            head_path, tail_path = os.path.split(args.input_file)
+            out_jobs_path = os.path.join(head_path, '.'.join(['out_jobs', tail_path]))
+            ear2prv(out_jobs_path, args.input_file, job_id=args.jobid, step_id=args.step_id, output_fn=args.output)
+
+        if csv_generated and args.keep_csv:
+            os.system("rm " + input_file)
+
+    return parser_action
+
+
+def build_parser(conf_metrics):
     """
-    Given the used `metrics`, returns a parser to
+    Given the used `conf_metrics`, returns a parser to
     read and check command line arguments.
     """
     class CustomHelpFormatter(argparse.HelpFormatter):
@@ -568,109 +595,59 @@ def build_parser(metrics):
                                      'and visualize information files given by'
                                      ' EARL.', formatter_class=formatter)
     parser.add_argument('--version', action='version', version='%(prog)s 4.0')
-    parser.add_argument('input_file', help='Specifies the input file(s) name(s'
+
+    parser.add_argument('--format', required=True,
+            help='Build results according to chosen format: runtime or ear2prv '
+                 '(using paraver tool).')
+
+    parser.add_argument('--input_file', help='Specifies the input file(s) name(s'
                         ') to read data from.')
 
+    parser.add_argument('-j', '--jobid', type=int, required=True,
+                        help='Filter the data by the Job ID.')
+    parser.add_argument('--stepid', type=int, required=True,
+                        help='Filter the data by the Step ID.')
+
+    parser.add_argument('-m', '--metrics', nargs='+',
+                            choices=list(conf_metrics.metrics.keys()),
+                            help='Space separated list of case sensitive'
+                            ' metrics names to visualize. Allowed values are '
+                            + ', '.join(conf_metrics.metrics.keys()),
+                            metavar='metric')
+
+    # ONLY for runtime format
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--save', action='store_true',
                        help='Activate the flag to store resulting figures.')
     group.add_argument('--show', action='store_true',
                        help='Show the resulting figure (default).')
-
     parser.add_argument('-t', '--title',
-                        help='Set the resulting figure title.')
+                        help='Set the resulting figure title '
+                             '(Only valid with runtime format).')
     parser.add_argument('-o', '--output',
                         help='Sets the output image name.'
-                        ' Only valid if `--save` flag is set.')
-    parser.add_argument('-j', '--jobid', type=int,
-                        help='Filter the data by the Job ID.')
-    parser.add_argument('--stepid', type=int,
-                        help='Filter the data by the Step ID.')
-    # parser.add_argument('-v', '--verbosity', action="count",
-    #                     help="increase output verbosity"
-    #                     "(e.g., -vv is more than -v)")
-    parser.add_argument('--format',
-            help='Build results according to chosen format: runtime or ear2prv (using paraver tool).')
-
-    parser.set_defaults(func=eacct_parser_action)
-
-    subparsers = parser.add_subparsers(help='Functionalities currently'
-                                       ' supported by this program.',
-                                       description='Type `ear_analytics '
-                                       '<dummy_filename> {runtime,resume,'
-                                       'ear2prv} -h` to get more info of '
-                                       'each subcommand')
-
-    # create the parser for the `recursive` command
-    parser_run = subparsers.add_parser('runtime',
-                                       help='Generate a heatmap graph showing'
-                                       ' the behaviour of some metrics monitor'
-                                       'ed with EARL. The file must be outpute'
-                                       "d by `eacct -r` command or by an EAR's"
-                                       ' report plugin.',
-                                       formatter_class=formatter)
-
-    parser_run.add_argument('-s', '--stepid', type=int,
-                            help='Sets the STEP ID of the job you are working'
-                            ' with.')
-
-    group_2 = parser_run.add_mutually_exclusive_group()
-    group_2.add_argument('-r', '--relative_range', action='store_true',
+                             'Only valid if `--save` flag is set '
+                            ' and with runtime format')
+    parser.add_argument('-r', '--relative_range', action='store_true',
                          help='Use the relative range of a metric over the '
                          'trace data to build the gradient.')
-    group_2.add_argument('--absolute-range', action='store_true',
-                         help='Use the absolute range configured for metrics '
-                         'to build the gradient (default).')
-
-    parser_run.add_argument('-l', '--horizontal_legend', action='store_true',
+    parser.add_argument('-l', '--horizontal_legend', action='store_true',
                             help='Display the legend horizontally. This option'
                             ' is useful when your trace has a low number of'
                             ' nodes.')
 
-    parser_run.add_argument('-m', '--metrics', nargs='+', required=True,
-                            choices=list(metrics.metrics.keys()),
-                            help='Space separated list of case sensitive'
-                            ' metrics names to visualize. Allowed values are '
-                            + ', '.join(metrics.metrics.keys()),
-                            metavar='metric')
+    parser.add_argument('--keep_csv', action='store_true',
+                            help='remove temorary csv file')
 
-    parser_run.set_defaults(func=runtime_parser_action_closure(metrics))
-
-    # create the parser for the `resume` command
-    parser_res = subparsers.add_parser('resume',
-                                       help='Generate a resume about Energy'
-                                       ' and Power save, and Time penalty of'
-                                       ' an application monitored with EARL.',
-                                       formatter_class=formatter)
-    parser_res.add_argument('base_freq', help='Specify which'
-                            ' frequency is used as base '
-                            'reference for computing and showing'
-                            ' savings and penalties in the figure.',
-                            type=float)
-    parser_res.add_argument('--app_name', help='Set the application name to'
-                            ' get resume info.')
-    parser_res.set_defaults(func=res_parser_action)
-
-    # create the parser for the `ear2prv` command
-    parser_prv = subparsers.add_parser('ear2prv',
-                                       help='Generate a trace file according '
-                                       'to the Paraver trace format. The file '
-                                       'must obtained by `eacct -j <job_id> -r'
-                                       ' -o -c <input_file>`.',
-                                       formatter_class=formatter)
-
-    parser_prv.add_argument('step_id', type=int,
-                            help='Sets the STEP ID of the job you are working'
-                            ' with.')
-
-    parser_prv.set_defaults(func=prv_parser_action)
+    parser.set_defaults(func=parser_action_closure(conf_metrics))
 
     return parser
 
 
 def eacct(result_format, jobid, stepid):
     # A temporary folder to store the generated csv file
-    csv_file = "tmp_"+str(jobid)+".csv"
+    print("in aacct")
+    csv_file = "tmp_"+str(jobid)+"."+str(stepid)+".csv"
 
     if result_format == "runtime":
         os.system("eacct -j " + str(jobid) + "." + str(stepid) + " -r -c " + csv_file)
@@ -678,19 +655,21 @@ def eacct(result_format, jobid, stepid):
         os.system("eacct -j " + str(jobid) + "." + str(stepid) + " -r -o -c " + csv_file)
     else:
         print("Unrecognized format: please choose between 'runtime' and 'ear2prv'.")
-    # input_file => should be now csv_file
+
+    return csv_file
 
 def main():
     """ Entry method. """
 
     # Read configuration file and init `metrics` data structure
-    metrics = init_metrics(read_ini('config.ini'))
+    conf_metrics = init_metrics(read_ini('config.ini'))
 
     # create the top-level parser
-    parser = build_parser(metrics)
+    parser = build_parser(conf_metrics)
 
     args = parser.parse_args()
 
+    # condition if input file not given
     args.func(args)
 
 
