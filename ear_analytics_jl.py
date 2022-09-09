@@ -336,7 +336,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
           .merge(df_job)
           .assign(
               CPI=lambda df: df.CPI * 1000000,  # Paraver needs values > 0
-              ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,
+              TIME=lambda df: df.TIME * 1000000,
               IO_MBS=lambda df: df.IO_MBS * 1000000,
               time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000  # (us)
               )
@@ -348,7 +348,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
           .join(pd.Series(dtype=np.int64, name='gpu_util'))
           .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
           .astype(
-              {'ITER_TIME_SEC': np.int64,
+              {'TIME': np.int64,
                'CPI': np.int64,
                'TPI': np.int64,
                'MEM_GBS': np.int64,
@@ -447,6 +447,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
                                       thread_lvl_names])
 
         names_conf_str = '\n'.join([names_conf_str, thread_lvl_names])
+
+    if not output_fn:
+        output_fn = loop_data_fn.split('.')[0]
 
     with open('.'.join([output_fn, 'row']), 'w') as row_file:
         # print(f'Row file:\n{names_conf_str}')
