@@ -170,10 +170,16 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     It also receives the `filename` to read data from,
     and `mtrcs` supported by ear_analytics.
     """
+
+    def join_metric_node(df):
+        "Given a DataFrame df, returns it flattening it's columns MultiIndex."
+        df.columns = df.columns.to_flat_index()
+        return df
+
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-          .groupby(['NODENAME', 'TIMESTAMP'])
-          .agg(lambda x: x).unstack(level=0)
+          # .groupby(['NODENAME', 'TIMESTAMP'])
+          # .agg(lambda x: x).unstack(level=0)
           .assign(
                 avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
                 tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
@@ -197,8 +203,13 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        m_data = df[df.filter(regex=metric_name).columns]
-        m_data.columns = m_data.columns.to_flat_index()
+        metric_filter = df.filter(regex=metric_name).columns
+
+        m_data = (df
+                  .pivot_table(values=metric_filter, index='TIMESTAMP', columns='NODENAME')
+                  .bfill()
+                  .pipe(join_metric_node)
+                  )
         m_data.index = pd.to_datetime(m_data.index, unit='s')
 
         new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
@@ -211,7 +222,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
 
         # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[19.2, 1 * len(m_data.columns) * 2])
+        fig = plt.figure(figsize=[19.2, 0.5 * len(m_data.columns)])
 
         # We use a grid layout to easily insert the gradient legend
         if not horizontal_legend:
@@ -231,15 +242,28 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             # print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
             #       f'{np.nanmax(m_data_array)}) for {metric_name}')
 
+        # Check if the requested metric is per GPU
+        gpu_metric_regex_str = r'(GFREQ|GUTIL|GFREQ|GMEMFREQ|GMEMUTIL)(\d)'
+        gpu_metric_regex = re.compile(gpu_metric_regex_str)
+
         for i, _ in enumerate(m_data_array):
-            if not horizontal_legend:
-                axes = fig.add_subplot(grid_sp[i, 0], ylabel=m_data.columns[i])
+
+            gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
+
+            if gpu_metric_match:
+                ylabel_text = (f'GPU{gpu_metric_match.group(2)}'
+                               f' @ {m_data.columns[i][1]}')
             else:
-                axes = fig.add_subplot(gs1[i], ylabel=m_data.columns[i])
+                ylabel_text = m_data.columns[i][1]
+
+            if not horizontal_legend:
+                axes = fig.add_subplot(grid_sp[i, 0], ylabel=ylabel_text)
+            else:
+                axes = fig.add_subplot(gs1[i], ylabel=ylabel_text)
 
             axes.set_yticks([])
-            axes.set_ylabel(axes.get_ylabel(), rotation=0,
-                            weight='bold', labelpad=85)
+            axes.set_ylabel(ylabel_text, rotation=0,
+                            weight='bold', labelpad=len(ylabel_text) * 4)
 
             data = np.array(m_data_array[i], ndmin=2)
 
@@ -311,10 +335,10 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
           .pipe(filter_df, JOBID=job_id, STEPID=step_id)
           .merge(df_job)
           .assign(
-              CPI=lambda df: df.CPI * 1000000,
+              CPI=lambda df: df.CPI * 1000000,  # Paraver needs values > 0
               ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,
               IO_MBS=lambda df: df.IO_MBS * 1000000,
-              time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000
+              time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000  # (us)
               )
           .join(pd.Series(dtype=np.int64, name='task_id'))
           .join(pd.Series(dtype=np.int64, name='app_id'))
@@ -560,12 +584,12 @@ def parser_action_closure(conf_metrics):
             args.save, args.title, args.jobid, args.stepid, args.output,
             args.horizontal_legend)
 
-        if args.format == "rear2prv" :
+        if args.format == "ear2prv" :
             head_path, tail_path = os.path.split(args.input_file)
             out_jobs_path = os.path.join(head_path, '.'.join(['out_jobs', tail_path]))
-            ear2prv(out_jobs_path, args.input_file, job_id=args.jobid, step_id=args.step_id, output_fn=args.output)
+            ear2prv(out_jobs_path, args.input_file, job_id=args.jobid, step_id=args.stepid, output_fn=args.output)
 
-        if csv_generated and args.keep_csv:
+        if csv_generated and not args.keep_csv:
             os.system("rm " + input_file)
 
     return parser_action
