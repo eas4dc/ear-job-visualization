@@ -177,7 +177,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 else:
                     name = output
 
-            print(f'storing figure at {name}')
+            print(f'storing figure at {name}.png')
 
             plt.savefig(fname=name, bbox_inches='tight', transparent=True)
 
@@ -448,7 +448,9 @@ def parser_action_closure(conf_metrics):
                     step_id=args.stepid, output_fn=args.output)
 
         if csv_generated and not args.keep_csv:
-            os.system(f'rm {input_file} && rm {out_jobs_path}')
+            os.system(f'rm {input_file}')
+            if args.format == 'ear2prv':
+                os.system(f'rm {out_jobs_path}')
 
     return parser_action
 
@@ -484,20 +486,13 @@ def build_parser(conf_metrics):
                     'runtime (static images) or ear2prv (using paraver '
                     'tool).')
 
-        parser.add_argument('--input_file', help='Specifies the input file(s) '
-                                             'name(s) to read data from.')
+    parser.add_argument('--input_file', help='Specifies the input file(s) '
+                                         'name(s) to read data from.')
 
     parser.add_argument('-j', '--jobid', type=int, required=True,
                         help='Filter the data by the Job ID.')
     parser.add_argument('-s', '--stepid', type=int, required=True,
                         help='Filter the data by the Step ID.')
-
-    parser.add_argument('-m', '--metrics', nargs='+',
-                    choices=list(conf_metrics.metrics.keys()),
-                    help='Space separated list of case sensitive'
-                    ' metrics names to visualize. Allowed values are '
-                    f'{", ".join(conf_metrics.metrics.keys())}',
-                    metavar='metric')
 
     # ONLY for runtime format
     runtime_group_args = parser.add_argument_group('`runtime` format options')
@@ -523,6 +518,13 @@ def build_parser(conf_metrics):
                                     help='Display the legend horizontally. '
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
+
+    runtime_group_args.add_argument('-m', '--metrics', nargs='+',
+                                    choices=list(conf_metrics.metrics.keys()),
+                                    help='Space separated list of case sensitive'
+                                    ' metrics names to visualize. Allowed values are '
+                                    f'{", ".join(conf_metrics.metrics.keys())}',
+                                    metavar='metric')
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
