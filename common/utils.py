@@ -39,3 +39,10 @@ def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
             .mask('JID', job_id)
             .mask('STEPID', step_id)
             )
+
+
+def list_str(values):
+    """
+    Split the string `values` using comma as a separator.
+    """
+    return values.split(',')

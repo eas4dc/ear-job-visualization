@@ -3,6 +3,8 @@
 
 import argparse
 import os
+import sys
+import subprocess
 import time
 import re
 
@@ -18,7 +20,7 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
-from common.utils import filter_df
+from common.utils import filter_df, list_str
 
 
 def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
@@ -410,15 +412,28 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
 
 
 def eacct(result_format, jobid, stepid):
-    # A temporary folder to store the generated csv file
-    csv_file = '.'.join(['_'.join(['tmp', str(jobid), str(stepid)]), 'csv'])
+    # First check if the job_id exist
+    cmd = ["eacct", "-j", f"{jobid}"]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE)
+    if "No jobs found" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid} No jobs found.")
+        sys.exit()
 
+    # A temporary folder to store the generated csv file
+    csv_file = '.'.join(['_'.join(['tmp', f"{jobid}", f"{stepid}"]), 'csv'])
     if result_format == "runtime":
-        os.system(f"eacct -j {jobid}.{stepid} -r -c {csv_file}")
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-c", csv_file]
     elif result_format == "ear2prv":
-        os.system(f"eacct -j {jobid}.{stepid} -r -o -c {csv_file}")
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-o", "-c", csv_file]
     else:
         print("Unrecognized format: Please contact with support@eas4dc.com")
+        sys.exit()
+
+    # Second check (loops)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE)
+    if "No loops retrieved" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid}.{stepid} No loops retrieved")
+        sys.exit()
 
     return csv_file
 
@@ -519,12 +534,19 @@ def build_parser(conf_metrics):
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
 
-    runtime_group_args.add_argument('-m', '--metrics', nargs='+',
-                                    choices=list(conf_metrics.metrics.keys()),
+    runtime_group_args.add_argument('-m', '--metrics', type=list_str,
+                                    default=['cpi', 'gbs', 'gflops'],
                                     help='Space separated list of case sensitive'
                                     ' metrics names to visualize. Allowed values are '
                                     f'{", ".join(conf_metrics.metrics.keys())}',
                                     metavar='metric')
+
+    args = parser.parse_args()
+    for m in args.metrics:
+        if m not in list(conf_metrics.metrics.keys()):
+            print("error: argument -m/--metrics: invalid choice: ", m)
+            print("choose from:", list(conf_metrics.metrics.keys()))
+            sys.exit()
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
