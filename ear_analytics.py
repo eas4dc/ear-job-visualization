@@ -3,6 +3,8 @@
 
 import argparse
 import os
+import sys
+import subprocess
 import time
 import re
 
@@ -18,146 +20,7 @@ from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
-from common.utils import filter_df
-
-
-def resume(filename, base_freq, app_id=None, job_id=None,
-           save=False, output=None, title=None):
-    """
-    This function generates a graph of performance metrics given by `filename`.
-
-    Performance metrics (Energy and Power save, and Time penalty)
-    are ploted as percentage with respect to MONITORING (MO) results with the
-    frequency `base_freq`.
-
-    If the file `filename` contains resume information
-    of multiple applications this function also accepts the parameter
-    `app_name` and/or `job_id` which filters file's data to work only with'
-    ' `app_name` and/or `job_id` application results.
-    """
-
-    def preprocess_df(data_f):
-        """
-        Pre-process DataFrame `data_f` to get workable data.
-        """
-        return (data_f
-                .assign(
-                  def_freq=lambda x: round(data_f['DEF.FREQ'] * 10**-6, 4),
-                  avg_cpu_freq=lambda x:
-                  round(data_f['AVG.CPUFREQ'] * 10**-6, 4),
-                  avg_imc_freq=lambda x:
-                  round(data_f['AVG.IMCFREQ'] * 10**-6, 4),
-                  energy=lambda x:
-                  data_f['TIME'] * data_f['DC-NODE-POWER'],
-                )
-                .drop(['DEF.FREQ', 'AVG.CPUFREQ', 'AVG.IMCFREQ'], axis=1)
-                )
-
-    # Filter rows and pre-process data
-    data_f = (read_data(filename)
-              .pipe(filter_df, JOBID=job_id, APP_ID=app_id)  # Filter rows
-              .pipe(preprocess_df)
-              )
-    # data_f = preprocess_df(filter_by_job_step_app(read_data(filename),
-    #                        job_id=job_id, app_id=app_id))
-
-    # Compute per step energy consumed
-    energy_sums = (data_f
-                   .groupby(['POLICY', 'def_freq', 'STEP_ID'])['energy']
-                   .sum()
-                   )
-
-    # resume data
-    re_dat = (pd
-              .concat([data_f
-                      .groupby(['POLICY', 'def_freq', 'STEP_ID'])
-                      [['TIME', 'DC-NODE-POWER', 'avg_cpu_freq',
-                        'avg_imc_freq']]
-                      .mean(),
-                      energy_sums],
-                      axis=1
-                      )
-              .groupby(['POLICY', 'def_freq'])
-              .mean()
-              )
-
-    # reference data
-    ref_data = re_dat.loc['monitoring', base_freq]
-
-    # Computes savings and penalties
-    re_dat['Time penalty'] = (
-            (re_dat['TIME'] - ref_data['TIME'])
-            / ref_data['TIME']
-            ) * 100
-    re_dat['Energy save'] = (
-            (ref_data['energy'] - re_dat['energy'])
-            / ref_data['energy']
-            ) * 100
-    re_dat['Power save'] = (
-            (ref_data['DC-NODE-POWER'] - re_dat['DC-NODE-POWER'])
-            / ref_data['DC-NODE-POWER']
-            ) * 100
-
-    dropped = re_dat.drop(('monitoring', base_freq))
-
-    results = dropped[['Time penalty', 'Energy save',
-                       'Power save']]
-
-    # Get avg. cpu and imc frequencies
-    # freqs = dropped[['avg_cpu_freq', 'avg_imc_freq']]
-
-    # Prepare and create the plot
-    tit = 'resume'
-    if title:
-        tit = title
-    elif app_id:
-        tit = app_id + f' vs. {base_freq} GHz'
-
-    # plt.rc('font', family='serif')
-    # plt.rc('xtick', labelsize='x-small')
-    # plt.rc('ytick', labelsize='x-small')
-
-    axes = results.plot(kind='bar', figsize=(8, 6),
-                        rot=0, legend=False)  # , fontsize=20)
-    axes.set_xlabel('POLICY, def. Freq (GHz)')  # , fontsize=20)
-    axes.set_title(tit, loc='center', wrap=True, pad=10.0, weight='bold')
-    plt.tight_layout()
-
-    # plt.gcf().suptitle(tit)  # , fontsize='22', weight='bold')
-
-    # ax2 = axes.twinx()
-    # freqs.plot(ax=ax2,  ylim=(0, 3.5), color=['cyan', 'purple'],
-    #            linestyle='-.', legend=False, fontsize=20)
-    # ax2.set_ylabel(ylabel='avg. Freq (GHz)', labelpad=20.0, fontsize=20)
-
-    # create the legend
-    handles_1, labels_1 = axes.get_legend_handles_labels()
-    # handles_2, labels_2 = ax2.get_legend_handles_labels()
-
-    # axes.legend(handles_1 + handles_2,
-    # labels_1 + labels_2, loc=0, fontsize=15)
-    axes.legend(handles_1, labels_1, loc=0)  # , fontsize=15)
-
-    # Plot a grid
-    plt.grid(axis='y', ls='--', alpha=0.5)
-
-    # Plot value labels above the bars
-    labels = np.ma.concatenate([results[serie].values
-                                for serie in results.columns])
-    rects = axes.patches
-
-    for rect, label in zip(rects, labels):
-        height = rect.get_height()
-        axes.text(rect.get_x() + rect.get_width() / 2,
-                  height + 0.1, '{:.2f}%'.format(label),
-                  ha='center', va='bottom')  # , fontsize=12)
-    if not save:
-        plt.show()
-    else:
-        name = 'resume.jpg'
-        if output is not None:
-            name = output
-        plt.savefig(fname=name, bbox_inches='tight')
+from common.utils import filter_df, list_str
 
 
 def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
@@ -172,6 +35,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     """
 
     def join_metric_node(df):
+        "Given a DataFrame df, returns it flattening it's columns MultiIndex."
         df.columns = df.columns.to_flat_index()
         return df
 
@@ -183,11 +47,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
                 tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
                 avg_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').mean(axis=1),
-                tot_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').sum(axis=1),
                 avg_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d')
                 .mean(axis=1),
-                tot_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d')
-                .sum(axis=1),
                 avg_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').mean(axis=1),
                 tot_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').sum(axis=1),
                 avg_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d')
@@ -204,8 +65,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
         metric_filter = df.filter(regex=metric_name).columns
 
-        m_data = df.pivot_table(values=metric_filter, index='TIMESTAMP', columns='NODENAME').bfill().pipe(join_metric_node)
-        # m_data.columns = m_data.columns.to_flat_index()
+        m_data = (df
+                  .pivot_table(values=metric_filter,
+                               index='TIMESTAMP', columns='NODENAME')
+                  .bfill()
+                  .pipe(join_metric_node)
+                  )
         m_data.index = pd.to_datetime(m_data.index, unit='s')
 
         new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
@@ -239,10 +104,11 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             #       f'{np.nanmax(m_data_array)}) for {metric_name}')
 
         # Check if the requested metric is per GPU
-        gpu_metric_regex_str = r'(GFREQ|GUTIL|GFREQ|GMEMFREQ|GMEMUTIL)(\d)'
+        gpu_metric_regex_str = r'(GFREQ|GUTIL|GPOWER|GMEMFREQ|GMEMUTIL)(\d)'
         gpu_metric_regex = re.compile(gpu_metric_regex_str)
 
         for i, _ in enumerate(m_data_array):
+
             gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
 
             if gpu_metric_match:
@@ -272,8 +138,13 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
             if i == 0:
                 tit = metric_name
-                if title is not None:
+                if title:  # We preserve the title got by the user
                     tit = f'{title}: {metric_name}'
+                else:  # The default title: %metric-%job_id-%step_id
+                    if job_id:
+                        tit = '-'.join([tit, str(job_id)])
+                        if step_id is not None:
+                            tit = '-'.join([tit, str(step_id)])
                 axes.set_title(tit, weight='bold')
 
             if i < len(m_data_array) - 1:
@@ -295,20 +166,22 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             plt.show()
             plt.pause(0.001)
         else:
-            name = f'runtime_{metric_name}.jpg'
-            if output is not None:
+            name = f'runtime_{metric_name}'
+            if job_id:
+                name = '-'.join([name, str(job_id)])
+                if step_id is not None:
+                    name = '-'.join([name, str(step_id)])
+
+            if output:
                 if os.path.isdir(output):
-                    print(f'storing file {filename} to {output} directory')
+
+                    name = os.path.join(output, name)
                 else:
-                    print(f'{output} directory does not exist! creating'
-                          f' directory and storing {filename} inside it.')
-                    os.makedirs(output)
-                if output[-1] == '/':
-                    filename = output + filename
-                else:
-                    filename = output + '/' + filename
-            print(f'Saving figure to {filename}')
-            plt.savefig(fname=name, bbox_inches='tight')
+                    name = output
+
+            print(f'storing figure at {name}.png')
+
+            plt.savefig(fname=name, bbox_inches='tight', transparent=True)
 
 
 def ear2prv(job_data_fn, loop_data_fn, job_id=None,
@@ -331,7 +204,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
           .merge(df_job)
           .assign(
               CPI=lambda df: df.CPI * 1000000,  # Paraver needs values > 0
-              ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,
+              TIME=lambda df: df.TIME * 1000000,
               IO_MBS=lambda df: df.IO_MBS * 1000000,
               time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000  # (us)
               )
@@ -343,7 +216,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
           .join(pd.Series(dtype=np.int64, name='gpu_util'))
           .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
           .astype(
-              {'ITER_TIME_SEC': np.int64,
+              {'TIME': np.int64,
                'CPI': np.int64,
                'TPI': np.int64,
                'MEM_GBS': np.int64,
@@ -412,13 +285,13 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
         # print(f'Application {appl_idx + 1} list: {appl_list_str}')
 
         # TASK level names
-        df.loc[(df['JOBID'] == app_job)
-               & (df['STEPID'] == app_step), 'app_id'] = np.int64(appl_idx + 1)
+        df.loc[(df['JOBID'] == app_job) &
+               (df['STEPID'] == app_step), 'app_id'] = np.int64(appl_idx + 1)
 
         for node_idx, node_name in enumerate(appl_nodes):
-            df.loc[(df['JOBID'] == app_job)
-                   & (df['STEPID'] == app_step)
-                   & (df['NODENAME'] == node_name), 'task_id'] \
+            df.loc[(df['JOBID'] == app_job) &
+                   (df['STEPID'] == app_step) &
+                   (df['NODENAME'] == node_name), 'task_id'] \
                            = np.int64(node_idx + 1)
 
             task_lvl_names = '\n'.join([task_lvl_names,
@@ -430,8 +303,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
 
         # APPL level names
         appl_lvl_names = '\n'.join([appl_lvl_names,
-                                   f'({np.int64(appl_idx + 1)}) '
-                                    + df_app['app_name'].unique()[0]])
+                                   f'({np.int64(appl_idx + 1)}) ' +
+                                   df_app['app_name'].unique()[0]])
 
     names_conf_str = '\n'.join([appl_lvl_names, task_lvl_names])
 
@@ -442,6 +315,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
                                       thread_lvl_names])
 
         names_conf_str = '\n'.join([names_conf_str, thread_lvl_names])
+
+    if not output_fn:
+        output_fn = loop_data_fn.split('.')[0]
 
     with open('.'.join([output_fn, 'row']), 'w') as row_file:
         # print(f'Row file:\n{names_conf_str}')
@@ -511,12 +387,17 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
     # Paraver Configuration file
     def_options_str = 'DEFAULT_OPTIONS\n\nLEVEL\tTASK\nUNITS\tSEC\n'
 
-    cols_regex = re.compile(r'((GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d))|JOBID|STEPID|NODENAME|FIRST_EVENT|LEVEL|SIZE|TIMESTAMP|start_time|end_time|time|task_id|app_id|app_name')
+    cols_regex = re.compile(r'((GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d))'
+                            r'|JOBID|STEPID|NODENAME|FIRST_EVENT|LEVEL|SIZE'
+                            r'|TIMESTAMP|start_time|end_time|time|task_id'
+                            r'|app_id|app_name')
     metrics = df.drop(columns=df.filter(regex=cols_regex).columns).columns
 
     event_typ_lst = []
     for metric in metrics:
-        event_typ_lst.append(f'EVENT_TYPE\n0\t{trace_sorted_df.columns.get_loc(metric)}\t{metric}\n')
+        event_typ_lst.append(f'EVENT_TYPE\n0\t'
+                     f'{trace_sorted_df.columns.get_loc(metric)}\t'
+                     f'{metric}\n')
 
     event_typ_lst.append('\n')
 
@@ -530,39 +411,68 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
         pcf_file.write(paraver_conf_file_str)
 
 
-def runtime_parser_action_closure(metrics):
+def eacct(result_format, jobid, stepid):
+    # First check if the job_id exist
+    cmd = ["eacct", "-j", f"{jobid}"]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE)
+    if "No jobs found" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid} No jobs found.")
+        sys.exit()
+
+    # A temporary folder to store the generated csv file
+    csv_file = '.'.join(['_'.join(['tmp', f"{jobid}", f"{stepid}"]), 'csv'])
+    if result_format == "runtime":
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-c", csv_file]
+    elif result_format == "ear2prv":
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-o", "-c", csv_file]
+    else:
+        print("Unrecognized format: Please contact with support@eas4dc.com")
+        sys.exit()
+
+    # Second check (loops)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE)
+    if "No loops retrieved" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid}.{stepid} No loops retrieved")
+        sys.exit()
+
+    return csv_file
+
+
+def parser_action_closure(conf_metrics):
+
+    def parser_action(args):
+
+        csv_generated = False
+
+        if args.input_file is None:
+            # Action performing eacct command and storing csv files
+            input_file = eacct(args.format, args.jobid, args.stepid)
+            args.input_file = input_file
+            csv_generated = True
+
+        if args.format == "runtime":
+            runtime(args.input_file, conf_metrics, args.metrics,
+                    args.relative_range, args.save, args.title, args.jobid,
+                    args.stepid, args.output, args.horizontal_legend)
+
+        if args.format == "ear2prv":
+            head_path, tail_path = os.path.split(args.input_file)
+            out_jobs_path = os.path.join(head_path,
+                                         '.'.join(['out_jobs', tail_path]))
+            ear2prv(out_jobs_path, args.input_file, job_id=args.jobid,
+                    step_id=args.stepid, output_fn=args.output)
+
+        if csv_generated and not args.keep_csv:
+            os.system(f'rm {input_file}')
+            if args.format == 'ear2prv':
+                os.system(f'rm {out_jobs_path}')
+
+    return parser_action
+
+
+def build_parser(conf_metrics):
     """
-    Closure function used to return the action
-    function when `recursive` sub-command is called.
-    """
-
-    def run_parser_action(args):
-        """ Action for `recursive` subcommand """
-        runtime(args.input_file, metrics, args.metrics, args.relative_range,
-                args.save, args.title, args.jobid, args.stepid, args.output,
-                args.horizontal_legend)
-
-    return run_parser_action
-
-
-def res_parser_action(args):
-    """ Action for `resume` subcommand """
-    resume(args.input_file, args.base_freq, args.app_name,
-           args.jobid, args.save, args.output, args.title)
-
-
-def prv_parser_action(args):
-    """ Action for `ear2prv` subcommand """
-    head_path, tail_path = os.path.split(args.input_file)
-    # print(head_path, tail_path)
-    out_jobs_path = os.path.join(head_path, '.'.join(['out_jobs', tail_path]))
-    ear2prv(out_jobs_path, args.input_file, job_id=args.jobid,
-            step_id=args.step_id, output_fn=args.output)
-
-
-def build_parser(metrics):
-    """
-    Given the used `metrics`, returns a parser to
+    Given the used `conf_metrics`, returns a parser to
     read and check command line arguments.
     """
     class CustomHelpFormatter(argparse.HelpFormatter):
@@ -584,93 +494,70 @@ def build_parser(metrics):
                                      'and visualize information files given by'
                                      ' EARL.', formatter_class=formatter)
     parser.add_argument('--version', action='version', version='%(prog)s 4.0')
-    parser.add_argument('input_file', help='Specifies the input file(s) name(s'
-                        ') to read data from.')
 
-    group = parser.add_mutually_exclusive_group()
+    parser.add_argument('--format', required=True,
+                    choices=['runtime', 'ear2prv'],
+                    help='Build results according to chosen format: '
+                    'runtime (static images) or ear2prv (using paraver '
+                    'tool).')
+
+    parser.add_argument('--input_file', help='Specifies the input file(s) '
+                                         'name(s) to read data from.')
+
+    parser.add_argument('-j', '--jobid', type=int, required=True,
+                        help='Filter the data by the Job ID.')
+    parser.add_argument('-s', '--stepid', type=int, required=True,
+                        help='Filter the data by the Step ID.')
+
+    # ONLY for runtime format
+    runtime_group_args = parser.add_argument_group('`runtime` format options')
+
+    group = runtime_group_args.add_mutually_exclusive_group()
     group.add_argument('--save', action='store_true',
                        help='Activate the flag to store resulting figures.')
     group.add_argument('--show', action='store_true',
                        help='Show the resulting figure (default).')
 
-    parser.add_argument('-t', '--title',
-                        help='Set the resulting figure title.')
+    runtime_group_args.add_argument('-t', '--title',
+                                help='Set the resulting figure title '
+                                '(Only valid with runtime format).')
+
+    runtime_group_args.add_argument('-r', '--relative_range',
+                                    action='store_true',
+                                    help='Use the relative range of a metric '
+                                    'over the trace data to build the '
+                                    'gradient.')
+
+    runtime_group_args.add_argument('-l', '--horizontal_legend',
+                                    action='store_true',
+                                    help='Display the legend horizontally. '
+                                    'This option is useful when your trace has'
+                                    ' a low number of nodes.')
+
+    runtime_group_args.add_argument('-m', '--metrics', type=list_str,
+                                    default=['cpi', 'gbs', 'gflops'],
+                                    help='Space separated list of case sensitive'
+                                    ' metrics names to visualize. Allowed values are '
+                                    f'{", ".join(conf_metrics.metrics.keys())}',
+                                    metavar='metric')
+
+    args = parser.parse_args()
+    for m in args.metrics:
+        if m not in list(conf_metrics.metrics.keys()):
+            print("error: argument -m/--metrics: invalid choice: ", m)
+            print("choose from:", list(conf_metrics.metrics.keys()))
+            sys.exit()
+
     parser.add_argument('-o', '--output',
-                        help='Sets the output image name.'
-                        ' Only valid if `--save` flag is set.')
-    parser.add_argument('-j', '--jobid', type=int,
-                        help='Filter the data by the Job ID.')
+                        help='Sets the output name. You can just set a path or'
+                             ' a filename. For `runtime` format option, this '
+                             'argument is only valid if `--save` flag is'
+                             ' given.')
 
-    subparsers = parser.add_subparsers(help='Functionalities currently'
-                                       ' supported by this program.',
-                                       description='Type `ear_analytics '
-                                       '<dummy_filename> {runtime,resume,'
-                                       'ear2prv} -h` to get more info of '
-                                       'each subcommand')
+    parser.add_argument('-k', '--keep_csv', action='store_true',
+                        help="Don't remove temorary csv files.")
 
-    # create the parser for the `recursive` command
-    parser_run = subparsers.add_parser('runtime',
-                                       help='Generate a heatmap graph showing'
-                                       ' the behaviour of some metrics monitor'
-                                       'ed with EARL. The file must be outpute'
-                                       "d by `eacct -r` command or by an EAR's"
-                                       ' report plugin.',
-                                       formatter_class=formatter)
-
-    parser_run.add_argument('-s', '--stepid', type=int,
-                            help='Sets the STEP ID of the job you are working'
-                            ' with.')
-
-    group_2 = parser_run.add_mutually_exclusive_group()
-    group_2.add_argument('-r', '--relative_range', action='store_true',
-                         help='Use the relative range of a metric over the '
-                         'trace data to build the gradient.')
-    group_2.add_argument('--absolute-range', action='store_true',
-                         help='Use the absolute range configured for metrics '
-                         'to build the gradient (default).')
-
-    parser_run.add_argument('-l', '--horizontal_legend', action='store_true',
-                            help='Display the legend horizontally. This option'
-                            ' is useful when your trace has a low number of'
-                            ' nodes.')
-
-    parser_run.add_argument('-m', '--metrics', nargs='+', required=True,
-                            choices=list(metrics.metrics.keys()),
-                            help='Space separated list of case sensitive'
-                            ' metrics names to visualize. Allowed values are '
-                            + ', '.join(metrics.metrics.keys()),
-                            metavar='metric')
-
-    parser_run.set_defaults(func=runtime_parser_action_closure(metrics))
-
-    # create the parser for the `resume` command
-    parser_res = subparsers.add_parser('resume',
-                                       help='Generate a resume about Energy'
-                                       ' and Power save, and Time penalty of'
-                                       ' an application monitored with EARL.',
-                                       formatter_class=formatter)
-    parser_res.add_argument('base_freq', help='Specify which'
-                            ' frequency is used as base '
-                            'reference for computing and showing'
-                            ' savings and penalties in the figure.',
-                            type=float)
-    parser_res.add_argument('--app_name', help='Set the application name to'
-                            ' get resume info.')
-    parser_res.set_defaults(func=res_parser_action)
-
-    # create the parser for the `ear2prv` command
-    parser_prv = subparsers.add_parser('ear2prv',
-                                       help='Generate a trace file according '
-                                       'to the Paraver trace format. The file '
-                                       'must obtained by `eacct -j <job_id> -r'
-                                       ' -o -c <input_file>`.',
-                                       formatter_class=formatter)
-
-    parser_prv.add_argument('step_id', type=int,
-                            help='Sets the STEP ID of the job you are working'
-                            ' with.')
-
-    parser_prv.set_defaults(func=prv_parser_action)
+    parser.set_defaults(func=parser_action_closure(conf_metrics))
 
     return parser
 
@@ -679,13 +566,14 @@ def main():
     """ Entry method. """
 
     # Read configuration file and init `metrics` data structure
-    metrics = init_metrics(read_ini('config.ini'))
+    conf_metrics = init_metrics(read_ini('config.ini'))
 
     # create the top-level parser
-    parser = build_parser(metrics)
+    parser = build_parser(conf_metrics)
 
     args = parser.parse_args()
 
+    # condition if input file not given
     args.func(args)
 
 
