@@ -429,10 +429,15 @@ def eacct(result_format, jobid, stepid):
         print("Unrecognized format: Please contact with support@eas4dc.com")
         sys.exit()
 
-    # Second check (loops)
+    # Second check (eacct errors)
     res = subprocess.run(cmd, stdout=subprocess.PIPE)
     if "No loops retrieved" in res.stdout.decode('utf-8') :
         print(f"eacct: {jobid}.{stepid} No loops retrieved")
+        sys.exit()
+
+    res = subprocess.run(cmd, stderr=subprocess.PIPE)
+    if "Error getting ear.conf path" in res.stderr.decode('utf-8') :
+        print("Error getting ear.conf path")
         sys.exit()
 
     return csv_file
@@ -508,6 +513,8 @@ def build_parser(conf_metrics):
                         help='Filter the data by the Job ID.')
     parser.add_argument('-s', '--stepid', type=int, required=True,
                         help='Filter the data by the Step ID.')
+    parser.add_argument('-n', '--node',
+                        help='Filter the data by the node (used ONLY for phase visualisation).')
 
     # ONLY for runtime format
     runtime_group_args = parser.add_argument_group('`runtime` format options')
@@ -576,6 +583,9 @@ def main():
     # condition if input file not given
     args.func(args)
 
+    # run query and plot generate phase plots
+    return args
+
 
 if __name__ == '__main__':
-    main()
+    args = main()
