@@ -8,6 +8,8 @@ import subprocess
 import time
 import re
 
+from heapq import merge
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,10 +41,14 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         df.columns = df.columns.to_flat_index()
         return df
 
+    for m in args.metrics:
+        if m not in list(mtrcs.metrics.keys()):
+            print("error: argument -m/--metrics: invalid choice: ", m)
+            print("choose from:", list(mtrcs.metrics.keys()))
+            return
+
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-          # .groupby(['NODENAME', 'TIMESTAMP'])
-          # .agg(lambda x: x).unstack(level=0)
           .assign(
                 avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
                 tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
@@ -184,10 +190,10 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             plt.savefig(fname=name, bbox_inches='tight', transparent=True)
 
 
-def ear2prv(job_data_fn, loop_data_fn, job_id=None,
+def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
             step_id=None, output_fn=None):
 
-    # Read the data
+    # Read the Job data
 
     df_job = (read_data(job_data_fn)
               .pipe(filter_df, id=job_id, step_id=step_id)
@@ -197,151 +203,258 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
                                                   "step_id": "STEPID",
                                                   'app_id': 'app_name'}))
               )
-    # print('Job data:\n', df_job)
+    print(df_job)
 
-    df = (read_data(loop_data_fn)
-          .pipe(filter_df, JOBID=job_id, STEPID=step_id)
-          .merge(df_job)
-          .assign(
-              CPI=lambda df: df.CPI * 1000000,  # Paraver needs values > 0
-              TIME=lambda df: df.TIME * 1000000,
-              IO_MBS=lambda df: df.IO_MBS * 1000000,
-              time=lambda df: (df.TIMESTAMP - df.start_time) * 1000000  # (us)
-              )
-          .join(pd.Series(dtype=np.int64, name='task_id'))
-          .join(pd.Series(dtype=np.int64, name='app_id'))
-          .join(pd.Series(dtype=np.int64, name='gpu_power'))
-          .join(pd.Series(dtype=np.int64, name='gpu_freq'))
-          .join(pd.Series(dtype=np.int64, name='gpu_mem_freq'))
-          .join(pd.Series(dtype=np.int64, name='gpu_util'))
-          .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
-          .astype(
-              {'TIME': np.int64,
-               'CPI': np.int64,
-               'TPI': np.int64,
-               'MEM_GBS': np.int64,
-               'IO_MBS': np.int64,
-               'PERC_MPI': np.int64,
-               'DC_NODE_POWER_W': np.int64,
-               'DRAM_POWER_W': np.int64,
-               'PCK_POWER_W': np.int64,
-               'GFLOPS': np.int64,
-               })
-          )
-    # print('Working DataFrame:\n', df)
+    # Read the Loop data
 
-    # Generating the Application list and row file
+    df_loops = (read_data(loop_data_fn)
+                .pipe(filter_df, JOBID=job_id, STEPID=step_id)
+                .merge(df_job)
+                .assign(
+                    # Paraver works with integers
+                    CPI=lambda df: df.CPI * 1000000,
+                    TIME=lambda df: df.TIME * 1000000,  # ear ITER_TIME_SEC
+                    IO_MBS=lambda df: df.IO_MBS * 1000000,
+                    # Paraver works at microsecond granularity
+                    time=lambda df: (df.TIMESTAMP -
+                                     df.start_time) * 1000000
+                    )
+                .join(pd.Series(dtype=np.int64, name='task_id'))
+                .join(pd.Series(dtype=np.int64, name='app_id'))
+                .join(pd.Series(dtype=np.int64, name='gpu_power'))
+                .join(pd.Series(dtype=np.int64, name='gpu_freq'))
+                .join(pd.Series(dtype=np.int64, name='gpu_mem_freq'))
+                .join(pd.Series(dtype=np.int64, name='gpu_util'))
+                .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
+                .astype(
+                    {'TIME': np.int64,  # ear4.2 ITER_TIME_SEC
+                     'CPI': np.int64,
+                     'TPI': np.int64,
+                     'MEM_GBS': np.int64,
+                     'IO_MBS': np.int64,
+                     'PERC_MPI': np.int64,
+                     'DC_NODE_POWER_W': np.int64,
+                     'DRAM_POWER_W': np.int64,
+                     'PCK_POWER_W': np.int64,
+                     'GFLOPS': np.int64,
+                     })
+                # Drop unnecessary columns
+                .drop(['FIRST_EVENT', 'LEVEL', 'SIZE',
+                       'TIMESTAMP', 'start_time', 'end_time'], axis=1)
+                )
 
-    node_info = pd.unique(df.NODENAME)
-    n_nodes = node_info.size
+    # Read EAR events data
 
-    # If only one step is assumed, the usage of numpy methods can be avoided.
-    f_time = (np.max(df_job.end_time) - np.min(df_job.start_time)) * 1000000
-    # print(f'Your trace files have {n_nodes} node(s) and they have a duration'
-    #       f' time of {f_time} seconds.')
+    df_events = None
 
-    """
-    print('Nodes are:')
-    for i, n in enumerate(node_info):
-        print(f'{i + 1}) {n}')
-    """
+    if events_data_fn:
+        # By now events are in a space separated csv file.
+        df_events = (read_data(events_data_fn, sep=r'\s+')
+                     .pipe(filter_df, Job_id=job_id, Step_id=step_id)
+                     .merge(df_job.rename(columns={'JOBID': 'Job_id', 'STEPID': 'Step_id'}))
+                     .assign(
+                         # Paraver works at microsecond granularity
+                         time=lambda df: (df.Timestamp -
+                                          df.start_time) * 1000000,
+                     )
+                     .join(pd.Series(dtype=np.int64, name='task_id'))
+                     .join(pd.Series(dtype=np.int64, name='app_id'))
+                     .join(pd.Series(dtype=np.int64, name='event_type'))
+                     # Drop unnecessary columns
+                     .drop(['Event_ID', 'Timestamp',
+                            'start_time', 'end_time'], axis=1)
+                     )
+        print(df_events)
 
-    appl_info = df.groupby(['JOBID', 'STEPID']).indices
+    # ### Paraver trace header
+    #
+    # **Important note** By now this tool assumes all nodes
+    # (where each one will be converted to a Paraver task) involved in a
+    # job-step use the same number of GPUs (where each one will be converted to
+    # a Paraver thread). It's needed to know how eacct command handles the
+    # resulting header when there is a different number of GPUs for each
+    # job-step requested.
+    #
+    # It is also assumed that both events and loops are from the same Job-step,
+    # executed on the same node set..
+    #
+    # #### Generic info of the trace file
+
+    node_info = np.sort(pd.unique(df_loops.NODENAME))
+    n_nodes = 0
+
+    if df_events is not None and not \
+            np.array_equal(node_info, np.sort(pd.unique(df_events.node_id))):
+        print('ERROR: Loops and events data do not have'
+                f' the same node information: {node_info}, {np.sort(pd.unique(df_events.node_id))}')
+        return
+    else:
+        n_nodes = node_info.size
+
+        f_time = (np.max(df_job.end_time) -
+                  np.min(df_job.start_time)) * 1000000
+
+        print(f'Your trace files have a duration time of {f_time} seconds.')
+
+    # #### Getting Application info
+    #
+    # An EAR Job-Step is a Paraver Application
+    #
+    # *By now this approach is useless, since we restrict the user to provide
+    # only a Job-Step. But managing more than one Paraver application
+    # (a Job-Step) is maintained to be more easy in a future if we wanted to
+    # work with multiple applications at once.*
+
+    appl_info = df_loops.groupby(['JOBID', 'STEPID']).groups
     n_appl = len(appl_info)
 
-    appl_list_str = ''  # The resulting Application List
+    print(f'Your trace files have {n_appl} application(s).')
 
-    # The task level names section (.row file) can be created here
-    task_lvl_names = f'LEVEL TASK SIZE {n_nodes * n_appl}'
+    # #### Generating the Application list and
+    # Paraver's Names Configuration File (.row)
+    #
+    # EAR reports node metrics. Each EAR node is a Paraver task, so in the most
+    # of cases a Paraver user can visualize the EAR data at least at the task
+    # level. There is one exception where the user will visualize different
+    # information when working at the Paraver's thread level: for GPU
+    # information. If EAR data contains information about GPU(s) on a node, the
+    # information of each GPU associated to that node can be visualized at the
+    # thread level. In other words, a node (task) have one or more GPUs
+    # (threads).
 
     # The application level names section (.row) can be created here
     appl_lvl_names = f'LEVEL APPL SIZE {n_appl}'
 
-    # Thread level, used to tag GPUs
-    thread_lvl_names = ''
-    n_threads = 0
+    # The task level names section can be created here.
+    # WARNING Assuming that we are only dealing with one application
+    task_lvl_names = f'LEVEL TASK SIZE {n_nodes * n_appl}'
+
+    total_task_cnt = 0  # The total number of tasks
+
+    appl_lists = []  # Application lists of all applications
+
+    # Thread level names for .row file. Only used if data contain GPU info
+    thread_lvl_names = []
+
+    # We count here the total number of threads
+    # (used later for the Names Configuration file).
+    total_threads_cnt = 0
 
     for appl_idx, (app_job, app_step) in enumerate(appl_info):
-        df_app = df[(df['JOBID'] == app_job) & (df['STEPID'] == app_step)]
 
-        appl_nodes = df['NODENAME'].unique()
+        df_app = df_loops[(df_loops['JOBID'] == app_job) &
+                          (df_loops['STEPID'] == app_step)]
+
+        appl_nodes = np.sort(pd.unique(df_loops.NODENAME))
+
+        if df_events is not None:
+            # Used only to check whether data correspond to the same Job-Step
+            df_events_app = df_events[(df_events['Job_id'] == app_job) &
+                                      (df_events['Step_id'] == app_step)]
+            if not np.array_equal(appl_nodes,
+                                  np.sort(pd.unique(df_events_app.node_id))):
+                print('ERROR: Loops and events data do not have'
+                      ' the same node information.')
+                return
+
         n_tasks = appl_nodes.size
+        total_task_cnt += n_tasks
 
-        gpu_info = df_app.filter(regex=r'GPOWER').columns
-        n_gpus = max(gpu_info.size, 1)
+        # An EAR GPU is a Paraver thread
+        gpu_info = df_app.filter(regex='GPOWER').columns
+        n_threads = gpu_info.size
 
-        # We accumulate the number of GPUs (threads)
-        # associated to this node (task)
-        n_threads += gpu_info.size
+        # We accumulate the number of GPUs (paraver threads)
+        total_threads_cnt += n_threads
 
-        # print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
-        #       f'task(s), nodes {appl_nodes}, {n_gpus} GPUs')
+        print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
+              f'task(s), nodes {appl_nodes}, {n_threads} GPUs (threads)\n')
 
-        appl_list = [f'{n_gpus}:{node_idx + 1}'
+        # Create here the application list, and append to the global appl list
+        appl_list = [f'{max(n_threads, 1)}:{node_idx + 1}'
                      for node_idx, _ in enumerate(appl_nodes)]
-        appl_list_str = ''.join([appl_list_str,
-                                 f'{n_tasks}({",".join(appl_list)})'])
+        appl_lists.append(f'{n_tasks}({",".join(appl_list)})')
 
-        # print(f'Application {appl_idx + 1} list: {appl_list_str}')
+        # Set each row its corresponding Appl Id
+        df_loops.loc[(df_loops['JOBID'] == app_job) &
+                     (df_loops['STEPID'] == app_step), 'app_id'] = \
+            np.int64(appl_idx + 1)
+
+        if df_events is not None:
+            df_events.loc[(df_events['Job_id'] == app_job) &
+                          (df_events['Step_id'] == app_step), 'app_id'] =\
+                np.int64(appl_idx + 1)
 
         # TASK level names
-        df.loc[(df['JOBID'] == app_job) &
-               (df['STEPID'] == app_step), 'app_id'] = np.int64(appl_idx + 1)
 
         for node_idx, node_name in enumerate(appl_nodes):
-            df.loc[(df['JOBID'] == app_job) &
-                   (df['STEPID'] == app_step) &
-                   (df['NODENAME'] == node_name), 'task_id'] \
-                           = np.int64(node_idx + 1)
+            # Set each row its corresponding Task Id
+            df_loops.loc[(df_loops['JOBID'] == app_job) &
+                         (df_loops['STEPID'] == app_step) &
+                         (df_loops['NODENAME'] == node_name), 'task_id'] \
+                = np.int64(node_idx + 1)
 
-            task_lvl_names = '\n'.join([task_lvl_names,
-                                       f'({np.int64(node_idx + 1)})'
-                                        f' {node_name}'])
+            if df_events is not None:
+                df_events.loc[(df_events['Job_id'] == app_job) &
+                              (df_events['Step_id'] == app_step) &
+                              (df_events['node_id'] == node_name), 'task_id'] \
+                    = np.int64(node_idx + 1)
 
-            for gpu_idx in range(n_gpus):
-                thread_lvl_names += f'({node_name}) GPU{gpu_idx}\n'
+            task_lvl_names = '\n'.join([task_lvl_names, f' {node_name}'])
+
+            # THREAD NAMES
+            for gpu_idx in range(n_threads):
+                (thread_lvl_names
+                 .append(f'({node_name}) GPU {gpu_idx} @ {node_name}'))
 
         # APPL level names
         appl_lvl_names = '\n'.join([appl_lvl_names,
-                                   f'({np.int64(appl_idx + 1)}) ' +
-                                   df_app['app_name'].unique()[0]])
+                                    f'({np.int64(appl_idx + 1)})'
+                                    f' {df_app.app_name.unique()[0]}'])
+
+    # The resulting Application List
+    appl_list_str = ':'.join(appl_lists)
 
     names_conf_str = '\n'.join([appl_lvl_names, task_lvl_names])
 
-    if n_threads != 0:
-        # Some application has GPUs, so we can configure the THREAD level
-        thread_lvl_names = '\n'.join(['LEVEL THREAD SIZE'
-                                      f' {n_threads * n_nodes}',
-                                      thread_lvl_names])
+    thread_lvl_names_str = ''
+    if total_threads_cnt != 0:
+        # Some application has GPUs, so we can configure and the THREAD level
+        thread_lvl_names_str = '\n'.join(['LEVEL THREAD SIZE'
+                                          f' {total_threads_cnt}',
+                                          '\n'.join(thread_lvl_names)])
 
-        names_conf_str = '\n'.join([names_conf_str, thread_lvl_names])
+        names_conf_str = '\n'.join([names_conf_str, thread_lvl_names_str])
 
+    # Store the Names Configuration File (.row)
     if not output_fn:
-        output_fn = loop_data_fn.split('.')[0]
+        output_fn = loop_data_fn.partition('.')[0]
 
     with open('.'.join([output_fn, 'row']), 'w') as row_file:
-        # print(f'Row file:\n{names_conf_str}')
         row_file.write(names_conf_str)
 
-    # Generating the header
+    # #### Generating the Paraver trace header
+
     date_time = time.strftime('%d/%m/%y at %H:%M',
                               time.localtime(np.min(df_job.start_time)))
+
     file_trace_hdr = (f'#Paraver ({date_time}):{f_time}'
                       f':0:{n_appl}:{appl_list_str}')
-    # print(f'Paraver trace header: {file_trace_hdr}')
 
-    # Trace file
+    # ### Paraver trace body
 
-    metrics = (df.drop(columns=['JOBID', 'STEPID', 'NODENAME', 'FIRST_EVENT',
-                                'LEVEL', 'SIZE', 'TIMESTAMP', 'start_time',
-                                'end_time', 'time', 'task_id', 'app_id',
-                                'app_name', 'gpu_power', 'gpu_freq',
-                                'gpu_mem_freq', 'gpu_util', 'gpu_mem_util'])
-                 .columns)
+    # #### Loops
+
+    metrics = (df_loops.drop(columns=['JOBID', 'STEPID', 'NODENAME',
+                                      'time', 'task_id', 'app_id', 'app_name',
+                                      'gpu_power', 'gpu_freq', 'gpu_mem_freq',
+                                      'gpu_util', 'gpu_mem_util']
+                             ).columns
+               )
 
     # We first sort data by timestamp in ascending
     # order as specified by Paraver trace format.
-    trace_sorted_df = df.sort_values('time')
+    trace_sorted_df = df_loops.sort_values('time')
 
     records = trace_sorted_df.to_records(index=False)
     columns = trace_sorted_df.columns
@@ -351,8 +464,10 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
     timestamp_idx = columns.get_loc('time')
 
     gpu_field_regex = re.compile(r'(GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d)')
-    gpu_field_map = {'GPOWER': 'gpu_power', 'GFREQ': 'gpu_freq',
-                     'GMEMFREQ': 'gpu_mem_freq', 'GUTIL': 'gpu_util',
+    gpu_field_map = {'GPOWER': 'gpu_power',
+                     'GFREQ': 'gpu_freq',
+                     'GMEMFREQ': 'gpu_mem_freq',
+                     'GUTIL': 'gpu_util',
                      'GMEMUTIL': 'gpu_mem_util',
                      }
 
@@ -379,39 +494,141 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
                              f':{thread_idx}:{row[timestamp_idx]}'
                              f':{metric_idx}:{event_val}')
 
-    file_trace_body = '\n'.join(body_list)
-
-    with open('.'.join([output_fn, 'prv']), 'w') as prv_file:
-        prv_file.write('\n'.join([file_trace_hdr, file_trace_body]))
-
-    # Paraver Configuration file
-    def_options_str = 'DEFAULT_OPTIONS\n\nLEVEL\tTASK\nUNITS\tSEC\n'
+    # #### Loops configuration file
 
     cols_regex = re.compile(r'((GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d))'
                             r'|JOBID|STEPID|NODENAME|FIRST_EVENT|LEVEL|SIZE'
                             r'|TIMESTAMP|start_time|end_time|time|task_id'
                             r'|app_id|app_name')
-    metrics = df.drop(columns=df.filter(regex=cols_regex).columns).columns
+    metrics = (df_loops
+               .drop(columns=df_loops.filter(regex=cols_regex).columns)
+               .columns)
 
-    event_typ_lst = []
-    for metric in metrics:
-        event_typ_lst.append(f'EVENT_TYPE\n0\t'
-                     f'{trace_sorted_df.columns.get_loc(metric)}\t'
-                     f'{metric}\n')
+    # A map with metric_name metric_idx
+    metric_event_typ_map = {metric: trace_sorted_df.columns.get_loc(metric)
+                            for metric in metrics}
 
-    event_typ_lst.append('\n')
+    event_typ_lst = [f'EVENT_TYPE\n0\t{metric_event_typ_map[metric]}'
+                     f'\t{metric}\n' for metric in metric_event_typ_map]
 
-    event_typ_str = '\n'.join(event_typ_lst)
+    # #### EAR events body and configuration
+    if df_events is not None:
 
-    paraver_conf_file_str = '\n'.join([def_options_str, event_typ_str])
+        # The starting Event identifier for EAR events
+        ear_events_id_off = max(metric_event_typ_map.values()) + 1
 
-    # print(f'Paraver configuration file:\n{paraver_conf_file_str}')
+        # Get all EAR events types
+        events_info = pd.unique(df_events.Event_type)
+
+        for event_idx, event_t in enumerate(events_info):
+
+            # We set the configuration of the EAR event type
+            event_typ_str = (f'EVENT_TYPE\n0\t{event_idx + ear_events_id_off}'
+                             f'\t{event_t}\n')
+            event_typ_lst.append(event_typ_str)
+
+            # Set the event identifier taking into account the offset made by
+            # loops metrics identifiers
+            df_events.loc[df_events['Event_type'] == event_t,
+                          'event_type'] = event_idx + ear_events_id_off
+
+        event_typ_lst.append('\n')
+
+        # We get a sorted (by time) DataFrame
+        df_events_sorted = (df_events
+                            .astype(
+                                {'task_id': int,
+                                 'app_id': int,
+                                 'event_type': int})
+                            .sort_values('time'))
+
+        smft = '2:0:{app_id}:{task_id}:1:{time}:{event_type}:{Value}'.format
+
+        ear_events_body_list = (df_events_sorted
+                                .apply(lambda x: smft(**x), axis=1)
+                                .to_list())
+
+        # #### Merging
+
+        # We use the heapq merge function where the key is the
+        # time field (position 5) of the trace row.
+        file_trace_body = '\n'.join(merge(body_list,
+                                          ear_events_body_list,
+                                          key=lambda x: x.split(sep=':')[5])
+                                    )
+    else:
+        file_trace_body = '\n'.join(body_list)
+
+    with open('.'.join([output_fn, 'prv']), 'w') as prv_file:
+        prv_file.write('\n'.join([file_trace_hdr, file_trace_body]))
+
+    # ## Paraver Configuration File
+
+    def_options_str = 'DEFAULT_OPTIONS\n\nLEVEL\tTASK\nUNITS\tSEC\n'
+
+    # Merging default settings with event types
+    paraver_conf_file_str = '\n'.join([def_options_str,
+                                       '\n'.join(event_typ_lst)])
+
+    # Adding the categorical labels for EAR events.
+    if df_events is not None:
+        # Hardcoded configuration: TODO: Read from a JSON
+        ear_event_types_values = {
+                'earl_state': {
+                    0: 'NO_PERIOD',
+                    1: 'FIRST_ITERATION',
+                    2: 'EVALUATING_LOCAL_SIGNATURE',
+                    3: 'SIGNATURE_STABLE',
+                    4: 'PROJECTION_ERROR',
+                    5: 'RECOMPUTING_N',
+                    6: 'SIGNATURE_HAS_CHANGED',
+                    7: 'TEST_LOOP',
+                    8: 'EVALUATING_GLOBAL_SIGNATURE',
+                },
+                'policy_accuracy': {
+                    0: 'OPT_NOT_READY',
+                    1: 'OPT_OK',
+                    2: 'OPT_NOT_OK',
+                    3: 'OPT_TRY_AGAIN',
+                },
+                'earl_phase': {
+                    1: 'APP_COMP_BOUND',
+                    2: 'APP_MPI_BOUND',
+                    3: 'APP_IO_BOUND',
+                    4: 'APP_BUSY_WAITING',
+                    5: 'APP_CPU_GPU',
+                },
+            }
+
+        for ear_event_type in ear_event_types_values:
+            idx = paraver_conf_file_str.find(ear_event_type)
+            if idx != -1:
+                values_str = ('\n'
+                              .join([f'{key}\t{value}'
+                                     for key, value
+                                     in (ear_event_types_values[ear_event_type]
+                                         .items()
+                                         )
+                                     ]
+                                    )
+                              )
+
+                st_p = idx + len(ear_event_type)
+
+                paraver_conf_file_str = ('\n'
+                                         .join([paraver_conf_file_str[:st_p],
+                                                'VALUES',
+                                                values_str,
+                                                paraver_conf_file_str[st_p+1:]
+                                                ]
+                                               )
+                                         )
 
     with open('.'.join([output_fn, 'pcf']), 'w') as pcf_file:
         pcf_file.write(paraver_conf_file_str)
 
 
-def eacct(result_format, jobid, stepid):
+def eacct(result_format, jobid, stepid, ear_events=False):
     # A temporary folder to store the generated csv file
     csv_file = '.'.join(['_'.join(['tmp', f"{jobid}", f"{stepid}"]), 'csv'])
 
@@ -439,6 +656,12 @@ def eacct(result_format, jobid, stepid):
         print(f"eacct: {jobid}.{stepid} No loops retrieved")
         sys.exit()
 
+    # Request EAR events
+    if ear_events:
+        with open('.'.join(['events', csv_file]), 'w') as event_f:
+            cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x"]
+            res = subprocess.run(cmd, stdout=event_f)
+
     # Return generated file
     return csv_file
 
@@ -451,7 +674,7 @@ def parser_action_closure(conf_metrics):
 
         if args.input_file is None:
             # Action performing eacct command and storing csv files
-            input_file = eacct(args.format, args.jobid, args.stepid)
+            input_file = eacct(args.format, args.jobid, args.stepid, args.events)
             args.input_file = input_file
             csv_generated = True
 
@@ -464,13 +687,21 @@ def parser_action_closure(conf_metrics):
             head_path, tail_path = os.path.split(args.input_file)
             out_jobs_path = os.path.join(head_path,
                                          '.'.join(['out_jobs', tail_path]))
-            ear2prv(out_jobs_path, args.input_file, job_id=args.jobid,
-                    step_id=args.stepid, output_fn=args.output)
+
+            events_data_path = None
+            if args.events:
+                events_data_path = os.path.join(head_path,
+                                                '.'.join(['events', tail_path]))
+
+            ear2prv(out_jobs_path, args.input_file, events_data_fn=events_data_path,
+                    job_id=args.jobid, step_id=args.stepid, output_fn=args.output)
 
         if csv_generated and not args.keep_csv:
             os.system(f'rm {input_file}')
             if args.format == 'ear2prv':
                 os.system(f'rm {out_jobs_path}')
+                if args.events:
+                    os.system(f'rm {events_data_path}')
 
     return parser_action
 
@@ -498,23 +729,24 @@ def build_parser(conf_metrics):
                                      description='High level support for read '
                                      'and visualize information files given by'
                                      ' EARL.', formatter_class=formatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 4.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 4.1')
 
     parser.add_argument('--format', required=True,
-                    choices=['runtime', 'ear2prv'],
-                    help='Build results according to chosen format: '
-                    'runtime (static images) or ear2prv (using paraver '
-                    'tool).')
+                        choices=['runtime', 'ear2prv'],
+                        help='Build results according to chosen format: '
+                        'runtime (static images) or ear2prv (using paraver '
+                        'tool).')
 
-    parser.add_argument('--input_file', help='Specifies the input file(s) '
-                                         'name(s) to read data from.')
+    parser.add_argument('--input_file', help=('Specifies the input file(s) '
+                                              'name(s) to read data from.'))
 
     parser.add_argument('-j', '--jobid', type=int, required=True,
                         help='Filter the data by the Job ID.')
     parser.add_argument('-s', '--stepid', type=int, required=True,
                         help='Filter the data by the Step ID.')
     parser.add_argument('-n', '--node',
-                        help='Filter the data by the node (used ONLY for phase visualisation).')
+                        help=('Filter the data by the node '
+                              '(used ONLY for phase visualisation).'))
 
     # ONLY for runtime format
     runtime_group_args = parser.add_argument_group('`runtime` format options')
@@ -526,8 +758,8 @@ def build_parser(conf_metrics):
                        help='Show the resulting figure (default).')
 
     runtime_group_args.add_argument('-t', '--title',
-                                help='Set the resulting figure title '
-                                '(Only valid with runtime format).')
+                                    help='Set the resulting figure title '
+                                    '(Only valid with runtime format).')
 
     runtime_group_args.add_argument('-r', '--relative_range',
                                     action='store_true',
@@ -541,19 +773,19 @@ def build_parser(conf_metrics):
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
 
+    metrics_help_str = ('Space separated list of case sensitive'
+                        ' metrics names to visualize. Allowed values are '
+                        f'{", ".join(conf_metrics.metrics.keys())}'
+                        )
     runtime_group_args.add_argument('-m', '--metrics', type=list_str,
                                     default=['cpi', 'gbs', 'gflops'],
-                                    help='Space separated list of case sensitive'
-                                    ' metrics names to visualize. Allowed values are '
-                                    f'{", ".join(conf_metrics.metrics.keys())}',
-                                    metavar='metric')
+                                    help=metrics_help_str, metavar='metric')
 
-    args = parser.parse_args()
-    for m in args.metrics:
-        if m not in list(conf_metrics.metrics.keys()):
-            print("error: argument -m/--metrics: invalid choice: ", m)
-            print("choose from:", list(conf_metrics.metrics.keys()))
-            sys.exit()
+    ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
+
+    events_help_str = 'Include EAR events in the trace fille.'
+    ear2prv_group_args.add_argument('-e', '--events', action='store_true',
+                                    help=events_help_str)
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
