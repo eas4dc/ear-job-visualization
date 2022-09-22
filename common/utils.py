@@ -22,6 +22,7 @@ def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
     """
     Filters the DataFrame `data_f` by `job_id`
     and/or `step_id` and/or `app_id`.
+    DEPRECATED.
     """
 
     def mask(data_f, key, value):
