@@ -41,6 +41,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         df.columns = df.columns.to_flat_index()
         return df
 
+    for m in args.metrics:
+        if m not in list(mtrcs.metrics.keys()):
+            print("error: argument -m/--metrics: invalid choice: ", m)
+            print("choose from:", list(mtrcs.metrics.keys()))
+            return
+
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
           .assign(
@@ -620,7 +626,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         pcf_file.write(paraver_conf_file_str)
 
 
-def eacct(result_format, jobid, stepid):
+def eacct(result_format, jobid, stepid, ear_events=False):
     # First check if the job_id exist
     cmd = ["eacct", "-j", f"{jobid}"]
     res = subprocess.run(cmd, stdout=subprocess.PIPE)
@@ -707,7 +713,7 @@ def build_parser(conf_metrics):
                                      description='High level support for read '
                                      'and visualize information files given by'
                                      ' EARL.', formatter_class=formatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 4.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 4.1')
 
     parser.add_argument('--format', required=True,
                         choices=['runtime', 'ear2prv'],
@@ -751,19 +757,20 @@ def build_parser(conf_metrics):
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
 
+    metrics_help_str = ('Space separated list of case sensitive'
+                        ' metrics names to visualize. Allowed values are '
+                        f'{", ".join(conf_metrics.metrics.keys())}'
+                        )
     runtime_group_args.add_argument('-m', '--metrics', type=list_str,
                                     default=['cpi', 'gbs', 'gflops'],
-                                    help='Space separated list of case sensitive'
-                                    ' metrics names to visualize. Allowed values are '
-                                    f'{", ".join(conf_metrics.metrics.keys())}',
-                                    metavar='metric')
+                                    help=metrics_help_str, metavar='metric')
 
-    args = parser.parse_args()
-    for m in args.metrics:
-        if m not in list(conf_metrics.metrics.keys()):
-            print("error: argument -m/--metrics: invalid choice: ", m)
-            print("choose from:", list(conf_metrics.metrics.keys()))
-            sys.exit()
+    ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
+
+    events_help_str = 'Include EAR events in the trace fille.'
+    ear2prv_group_args.add_argument('-e', '--events', action='store_true',
+                                    help=events_help_str)
+
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
