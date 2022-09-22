@@ -412,15 +412,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_id=None,
 
 
 def eacct(result_format, jobid, stepid):
-    # First check if the job_id exist
-    cmd = ["eacct", "-j", f"{jobid}"]
-    res = subprocess.run(cmd, stdout=subprocess.PIPE)
-    if "No jobs found" in res.stdout.decode('utf-8') :
-        print(f"eacct: {jobid} No jobs found.")
-        sys.exit()
-
     # A temporary folder to store the generated csv file
     csv_file = '.'.join(['_'.join(['tmp', f"{jobid}", f"{stepid}"]), 'csv'])
+
     if result_format == "runtime":
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-c", csv_file]
     elif result_format == "ear2prv":
@@ -429,17 +423,23 @@ def eacct(result_format, jobid, stepid):
         print("Unrecognized format: Please contact with support@eas4dc.com")
         sys.exit()
 
-    # Second check (eacct errors)
-    res = subprocess.run(cmd, stdout=subprocess.PIPE)
-    if "No loops retrieved" in res.stdout.decode('utf-8') :
-        print(f"eacct: {jobid}.{stepid} No loops retrieved")
-        sys.exit()
+    # Run the command
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    res = subprocess.run(cmd, stderr=subprocess.PIPE)
+    # Check the possible errors
     if "Error getting ear.conf path" in res.stderr.decode('utf-8') :
         print("Error getting ear.conf path")
         sys.exit()
 
+    if "No jobs found" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid} No jobs found.")
+        sys.exit()
+
+    if "No loops retrieved" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid}.{stepid} No loops retrieved")
+        sys.exit()
+
+    # Return generated file
     return csv_file
 
 
