@@ -203,6 +203,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                                                   "step_id": "STEPID",
                                                   'app_id': 'app_name'}))
               )
+    print(df_job)
 
     # Read the Loop data
 
@@ -249,8 +250,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     if events_data_fn:
         # By now events are in a space separated csv file.
         df_events = (read_data(events_data_fn, sep=r'\s+')
-                     .pipe(filter_df, Job_id=1541679, Step_id=0)
-                     .merge(df_job)
+                     .pipe(filter_df, Job_id=job_id, Step_id=step_id)
+                     .merge(df_job.rename(columns={'JOBID': 'Job_id', 'STEPID': 'Step_id'}))
                      .assign(
                          # Paraver works at microsecond granularity
                          time=lambda df: (df.Timestamp -
@@ -263,6 +264,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
                      )
+        print(df_events)
 
     # ### Paraver trace header
     #
@@ -281,10 +283,10 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     node_info = np.sort(pd.unique(df_loops.NODENAME))
     n_nodes = 0
 
-    if df_events and not \
+    if df_events is not None and not \
             np.array_equal(node_info, np.sort(pd.unique(df_events.node_id))):
         print('ERROR: Loops and events data do not have'
-              ' the same node information.')
+                f' the same node information: {node_info}, {np.sort(pd.unique(df_events.node_id))}')
         return
     else:
         n_nodes = node_info.size
@@ -345,7 +347,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
         appl_nodes = np.sort(pd.unique(df_loops.NODENAME))
 
-        if df_events:
+        if df_events is not None:
             # Used only to check whether data correspond to the same Job-Step
             df_events_app = df_events[(df_events['Job_id'] == app_job) &
                                       (df_events['Step_id'] == app_step)]
@@ -378,7 +380,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                      (df_loops['STEPID'] == app_step), 'app_id'] = \
             np.int64(appl_idx + 1)
 
-        if df_events:
+        if df_events is not None:
             df_events.loc[(df_events['Job_id'] == app_job) &
                           (df_events['Step_id'] == app_step), 'app_id'] =\
                 np.int64(appl_idx + 1)
@@ -392,15 +394,13 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                          (df_loops['NODENAME'] == node_name), 'task_id'] \
                 = np.int64(node_idx + 1)
 
-            if df_events:
+            if df_events is not None:
                 df_events.loc[(df_events['Job_id'] == app_job) &
                               (df_events['Step_id'] == app_step) &
                               (df_events['node_id'] == node_name), 'task_id'] \
                     = np.int64(node_idx + 1)
 
-            task_lvl_names = '\n'.join([task_lvl_names,
-                                       f'({np.int64(node_idx + 1)})'
-                                        f' {node_name}'])
+            task_lvl_names = '\n'.join([task_lvl_names, f' {node_name}'])
 
             # THREAD NAMES
             for gpu_idx in range(n_threads):
@@ -417,12 +417,14 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     names_conf_str = '\n'.join([appl_lvl_names, task_lvl_names])
 
+    thread_lvl_names_str = ''
     if total_threads_cnt != 0:
         # Some application has GPUs, so we can configure and the THREAD level
-        thread_lvl_names = '\n'.join(['LEVEL THREAD SIZE'
-                                      f' {total_threads_cnt}',
-                                      thread_lvl_names])
-        names_conf_str = '\n'.join([names_conf_str, thread_lvl_names])
+        thread_lvl_names_str = '\n'.join(['LEVEL THREAD SIZE'
+                                          f' {total_threads_cnt}',
+                                          '\n'.join(thread_lvl_names)])
+
+        names_conf_str = '\n'.join([names_conf_str, thread_lvl_names_str])
 
     # Store the Names Configuration File (.row)
     if not output_fn:
@@ -510,7 +512,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                      f'\t{metric}\n' for metric in metric_event_typ_map]
 
     # #### EAR events body and configuration
-    if df_events:
+    if df_events is not None:
 
         # The starting Event identifier for EAR events
         ear_events_id_off = max(metric_event_typ_map.values()) + 1
@@ -569,7 +571,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                                        '\n'.join(event_typ_lst)])
 
     # Adding the categorical labels for EAR events.
-    if df_events:
+    if df_events is not None:
         # Hardcoded configuration: TODO: Read from a JSON
         ear_event_types_values = {
                 'earl_state': {
@@ -650,6 +652,13 @@ def eacct(result_format, jobid, stepid, ear_events=False):
         print(f"eacct: {jobid}.{stepid} No loops retrieved")
         sys.exit()
 
+    # Request EAR events
+    if ear_events:
+        with open('.'.join(['events', csv_file]), 'w') as event_f:
+            cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x"]
+            res = subprocess.run(cmd, stdout=event_f, stderr=subprocess.PIPE)
+
+
     res = subprocess.run(cmd, stderr=subprocess.PIPE)
     if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
         print("Error getting ear.conf path")
@@ -666,7 +675,7 @@ def parser_action_closure(conf_metrics):
 
         if args.input_file is None:
             # Action performing eacct command and storing csv files
-            input_file = eacct(args.format, args.jobid, args.stepid)
+            input_file = eacct(args.format, args.jobid, args.stepid, args.events)
             args.input_file = input_file
             csv_generated = True
 
@@ -679,13 +688,21 @@ def parser_action_closure(conf_metrics):
             head_path, tail_path = os.path.split(args.input_file)
             out_jobs_path = os.path.join(head_path,
                                          '.'.join(['out_jobs', tail_path]))
-            ear2prv(out_jobs_path, args.input_file, job_id=args.jobid,
-                    step_id=args.stepid, output_fn=args.output)
+
+            events_data_path = None
+            if args.events:
+                events_data_path = os.path.join(head_path,
+                                                '.'.join(['events', tail_path]))
+
+            ear2prv(out_jobs_path, args.input_file, events_data_fn=events_data_path,
+                    job_id=args.jobid, step_id=args.stepid, output_fn=args.output)
 
         if csv_generated and not args.keep_csv:
             os.system(f'rm {input_file}')
             if args.format == 'ear2prv':
                 os.system(f'rm {out_jobs_path}')
+                if args.events:
+                    os.system(f'rm {events_data_path}')
 
     return parser_action
 
@@ -770,7 +787,6 @@ def build_parser(conf_metrics):
     events_help_str = 'Include EAR events in the trace fille.'
     ear2prv_group_args.add_argument('-e', '--events', action='store_true',
                                     help=events_help_str)
-
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
