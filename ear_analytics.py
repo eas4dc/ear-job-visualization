@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 import time
+import timeit
 import re
 
 from heapq import merge
@@ -203,7 +204,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                                                   "step_id": "STEPID",
                                                   'app_id': 'app_name'}))
               )
-    print(df_job)
 
     # Read the Loop data
 
@@ -264,7 +264,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
                      )
-        print(df_events)
 
     # ### Paraver trace header
     #
@@ -294,7 +293,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         f_time = (np.max(df_job.end_time) -
                   np.min(df_job.start_time)) * 1000000
 
-        print(f'Your trace files have a duration time of {f_time} seconds.')
+        print(f'Your trace file have a duration time of {f_time} seconds.')
 
     # #### Getting Application info
     #
@@ -308,7 +307,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     appl_info = df_loops.groupby(['JOBID', 'STEPID']).groups
     n_appl = len(appl_info)
 
-    print(f'Your trace files have {n_appl} application(s).')
+    # print(f'Your trace files have {n_appl} application(s).')
 
     # #### Generating the Application list and
     # Paraver's Names Configuration File (.row)
@@ -367,8 +366,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         # We accumulate the number of GPUs (paraver threads)
         total_threads_cnt += n_threads
 
-        print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
-              f'task(s), nodes {appl_nodes}, {n_threads} GPUs (threads)\n')
+        # print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
+        #       f'task(s), nodes {appl_nodes}, {n_threads} GPUs (threads)\n')
 
         # Create here the application list, and append to the global appl list
         appl_list = [f'{max(n_threads, 1)}:{node_idx + 1}'
