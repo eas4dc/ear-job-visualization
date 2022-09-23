@@ -1,5 +1,6 @@
 # pip install mysql-connector
 import os
+import argparse
 import mysql.connector
 import pandas as pd
 import numpy as np
@@ -251,21 +252,26 @@ def plot_earl_opt_accuracy(df, node, job_id, app_name, show=False):
         plt.savefig(fname=f"earl_opt_accuracy_{node}.png", bbox_inches="tight")
 
 
-def main():
+def main(job_id, node_id=None):
     """ Entry method. """
     # Read ear.conf to get DB connection
     ear_etc_path = os.getenv("EAR_ETC")
     ear_conf_file = os.path.join(ear_etc_path, "ear/ear.conf")
 
     conn, cursor = db_conn(ear_conf_file)
-    job_id = 1536577
     df = query(cursor, job_id)
 
     list_nodes = df.node_id.unique().tolist()
-    for node in list_nodes:
-        plot_earl_states(df, node, job_id, "SPO")
-        plot_earl_phases(df, node, job_id, "SPO")
-        plot_earl_opt_accuracy(df, node, job_id, "SPO")
+    if node_id:
+        if node_id in list_nodes:
+            plot_earl_states(df, node_id, job_id, "SPO")
+            plot_earl_phases(df, node_id, job_id, "SPO")
+            plot_earl_opt_accuracy(df, node_id, job_id, "SPO")
+    else:
+        for node_id in list_nodes:
+            plot_earl_states(df, node_id, job_id, "SPO")
+            plot_earl_phases(df, node_id, job_id, "SPO")
+            plot_earl_opt_accuracy(df, node_id, job_id, "SPO")
 
     # Close DB connection
     cursor.close()
@@ -273,4 +279,14 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+
+    #job_id = 1536577
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-j', '--jobid', type=int, required=True,
+                        help='Filter the data by the Job ID.')
+    parser.add_argument('-n', '--nodeid',
+                        help='Filter the data by the node..')
+    args = parser.parse_args()
+
+    main(args.jobid, args.nodeid)
