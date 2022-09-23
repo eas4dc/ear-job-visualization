@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 import time
+import timeit
 import re
 
 from heapq import merge
@@ -203,8 +204,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                                                   "step_id": "STEPID",
                                                   'app_id': 'app_name'}))
               )
-    print(df_job)
-
     # Read the Loop data
 
     df_loops = (read_data(loop_data_fn)
@@ -264,7 +263,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
                      )
-        print(df_events)
 
     # ### Paraver trace header
     #
@@ -294,7 +292,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         f_time = (np.max(df_job.end_time) -
                   np.min(df_job.start_time)) * 1000000
 
-        print(f'Your trace files have a duration time of {f_time} seconds.')
+        print(f'Your trace file have a duration time of {f_time} seconds.')
 
     # #### Getting Application info
     #
@@ -307,8 +305,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     appl_info = df_loops.groupby(['JOBID', 'STEPID']).groups
     n_appl = len(appl_info)
-
-    print(f'Your trace files have {n_appl} application(s).')
 
     # #### Generating the Application list and
     # Paraver's Names Configuration File (.row)
@@ -367,8 +363,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         # We accumulate the number of GPUs (paraver threads)
         total_threads_cnt += n_threads
 
-        print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
-              f'task(s), nodes {appl_nodes}, {n_threads} GPUs (threads)\n')
+        # print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
+        #       f'task(s), nodes {appl_nodes}, {n_threads} GPUs (threads)\n')
 
         # Create here the application list, and append to the global appl list
         appl_list = [f'{max(n_threads, 1)}:{node_idx + 1}'
@@ -629,15 +625,9 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
 
 def eacct(result_format, jobid, stepid, ear_events=False):
-    # First check if the job_id exist
-    cmd = ["eacct", "-j", f"{jobid}"]
-    res = subprocess.run(cmd, stdout=subprocess.PIPE)
-    if "No jobs found" in res.stdout.decode('utf-8'):
-        print(f"eacct: {jobid} No jobs found.")
-        sys.exit()
-
     # A temporary folder to store the generated csv file
     csv_file = '.'.join(['_'.join(['tmp', f"{jobid}", f"{stepid}"]), 'csv'])
+
     if result_format == "runtime":
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-c", csv_file]
     elif result_format == "ear2prv":
@@ -646,9 +636,19 @@ def eacct(result_format, jobid, stepid, ear_events=False):
         print("Unrecognized format: Please contact with support@eas4dc.com")
         sys.exit()
 
-    # Second check (eacct errors)
-    res = subprocess.run(cmd, stdout=subprocess.PIPE)
-    if "No loops retrieved" in res.stdout.decode('utf-8'):
+    # Run the command
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # Check the possible errors
+    if "Error getting ear.conf path" in res.stderr.decode('utf-8') :
+        print("Error getting ear.conf path")
+        sys.exit()
+
+    if "No jobs found" in res.stdout.decode('utf-8') :
+        print(f"eacct: {jobid} No jobs found.")
+        sys.exit()
+
+    if "No loops retrieved" in res.stdout.decode('utf-8') :
         print(f"eacct: {jobid}.{stepid} No loops retrieved")
         sys.exit()
 
@@ -656,14 +656,9 @@ def eacct(result_format, jobid, stepid, ear_events=False):
     if ear_events:
         with open('.'.join(['events', csv_file]), 'w') as event_f:
             cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x"]
-            res = subprocess.run(cmd, stdout=event_f, stderr=subprocess.PIPE)
+            res = subprocess.run(cmd, stdout=event_f)
 
-
-    res = subprocess.run(cmd, stderr=subprocess.PIPE)
-    if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
-        print("Error getting ear.conf path")
-        sys.exit()
-
+    # Return generated file
     return csv_file
 
 
