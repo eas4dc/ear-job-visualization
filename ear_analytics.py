@@ -292,7 +292,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         f_time = (np.max(df_job.end_time) -
                   np.min(df_job.start_time)) * 1000000
 
-        print(f'Your trace file have a duration time of {f_time} seconds.')
+        print(f'Your trace file have a duration time of {f_time} microseconds.')
 
     # #### Getting Application info
     #
