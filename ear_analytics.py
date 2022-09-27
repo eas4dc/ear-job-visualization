@@ -654,9 +654,8 @@ def eacct(result_format, jobid, stepid, ear_events=False):
 
     # Request EAR events
     if ear_events:
-        with open('.'.join(['events', csv_file]), 'w') as event_f:
-            cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x"]
-            res = subprocess.run(cmd, stdout=event_f)
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c', '.'.join(['events', csv_file])]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Return generated file
     return csv_file
