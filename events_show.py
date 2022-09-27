@@ -67,7 +67,15 @@ def query(cursor, job_id, node_id=None):
     return df
 
 
-def plot_earl_states(df, node, job_id, app_name, show=False):
+def plot_earl_states(df, job_id, node_id, app_name, output_path, show=False):
+    # TODO query the app_id from Jobs table ?
+    if app_name == None:
+        app_name = ""
+
+    # If the output path is not given, use the current directory
+    if output_path == None:
+        output_path = os.path.abspath(os.getcwd())
+
     # Identifiers with name and colors
     earl_states = {
         0: ["NO_PERIOD","gray"],
@@ -81,7 +89,7 @@ def plot_earl_states(df, node, job_id, app_name, show=False):
     }
 
     # Data for event_type = 4: "earl_state",
-    df4 = df.loc[(df.node_id==node) & (df.event_type==4) & (df.event_class != 7)]
+    df4 = df.loc[(df.node_id==node_id) & (df.event_type==4) & (df.event_class != 7)]
 
     # For start and end time during the application period
     bounds = {key: [[], []] for key in df4.event_class.unique()}
@@ -120,7 +128,7 @@ def plot_earl_states(df, node, job_id, app_name, show=False):
     ax.set_ylim(-0.25, 0.75)
     ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
     ax.set_yticks([])
-    ax.set_ylabel(node, rotation=0, labelpad=18, fontsize=13)
+    ax.set_ylabel(node_id, rotation=0, labelpad=18, fontsize=13)
 
     fig.tight_layout()
     ax.text(1.5, 0.5,fontsize=13, s=f"EARL_STATE: {app_name} (job-id {job_id})")
@@ -128,10 +136,18 @@ def plot_earl_states(df, node, job_id, app_name, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(fname=f"earl_states_{node}.png", bbox_inches="tight")
+        plt.savefig(fname=f"{output_path}/earl_states_{job_id}.{node_id}.png", bbox_inches="tight")
 
 
-def plot_earl_phases(df, node, job_id, app_name, show=False):
+def plot_earl_phases(df, job_id, node_id, app_name, output_path, show=False):
+    # TODO query the app_id from Jobs table ?
+    if app_name == None:
+        app_name = ""
+
+    # If the output path is not given, use the current directory
+    if output_path == None:
+        output_path = os.path.abspath(os.getcwd())
+
     # Identifiers with name and colors
     earl_phases = {
         1: ["APP_COMP_BOUND","green"],
@@ -142,7 +158,7 @@ def plot_earl_phases(df, node, job_id, app_name, show=False):
     }
 
     # Data for event_type = 4: "earl_state",
-    df5 = df.loc[(df.node_id==node) & (df.event_type==5)]
+    df5 = df.loc[(df.node_id==node_id) & (df.event_type==5)]
 
     # For start and end time during the application period
     bounds = {key: [[], []] for key in df5.event_class.unique()}
@@ -181,7 +197,7 @@ def plot_earl_phases(df, node, job_id, app_name, show=False):
     ax.set_ylim(-0.25, 0.75)
     ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
     ax.set_yticks([])
-    ax.set_ylabel(node, rotation=0, labelpad=18, fontsize=13)
+    ax.set_ylabel(node_id, rotation=0, labelpad=18, fontsize=13)
 
     fig.tight_layout()
     ax.text(1.5, 0.5,fontsize=13, s=f"EARL_PHASE: {app_name} (job-id {job_id})")
@@ -189,10 +205,19 @@ def plot_earl_phases(df, node, job_id, app_name, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(fname=f"earl_phase_{node}.png", bbox_inches="tight")
+        plt.savefig(fname=f"{output_path}/earl_phase_{job_id}.{node_id}.png", bbox_inches="tight")
 
 
-def plot_earl_opt_accuracy(df, node, job_id, app_name, show=False):
+def plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path, show=False):
+    # TODO query the app_id from Jobs table ?
+    if app_name == None:
+        app_name = ""
+
+    # If the output path is not given, use the current directory
+    if output_path == None:
+        output_path = os.path.abspath(os.getcwd())
+
+
     # Identifiers with name and colors
     earl_opt_accuracy = {
         0: ["OPT_NOT_READY","blue"],
@@ -202,7 +227,7 @@ def plot_earl_opt_accuracy(df, node, job_id, app_name, show=False):
     }
 
     # Data for event_type = 4: "earl_state",
-    df8 = df.loc[(df.node_id==node) & (df.event_type==8)]
+    df8 = df.loc[(df.node_id==node_id) & (df.event_type==8)]
 
     # For start and end time during the application period
     bounds = {key: [[], []] for key in df8.event_class.unique()}
@@ -241,7 +266,7 @@ def plot_earl_opt_accuracy(df, node, job_id, app_name, show=False):
     ax.set_ylim(-0.25, 0.75)
     ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
     ax.set_yticks([])
-    ax.set_ylabel(node, rotation=0, labelpad=18, fontsize=13)
+    ax.set_ylabel(node_id, rotation=0, labelpad=18, fontsize=13)
 
     fig.tight_layout()
     ax.text(1.5, 0.5,fontsize=13, s=f"EARL_OPT_ACCURACY: {app_name} (job-id {job_id})")
@@ -249,10 +274,10 @@ def plot_earl_opt_accuracy(df, node, job_id, app_name, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(fname=f"earl_opt_accuracy_{node}.png", bbox_inches="tight")
+        plt.savefig(fname=f"{output_path}/earl_opt_accuracy_{job_id}.{node_id}.png", bbox_inches="tight")
 
 
-def main(job_id, node_id=None):
+def main(job_id, node_id=None,  app_name=None, output_path=None):
     """ Entry method. """
     # Read ear.conf to get DB connection
     ear_etc_path = os.getenv("EAR_ETC")
@@ -264,14 +289,14 @@ def main(job_id, node_id=None):
     list_nodes = df.node_id.unique().tolist()
     if node_id:
         if node_id in list_nodes:
-            plot_earl_states(df, node_id, job_id, "SPO")
-            plot_earl_phases(df, node_id, job_id, "SPO")
-            plot_earl_opt_accuracy(df, node_id, job_id, "SPO")
+            plot_earl_states(df, job_id, node_id, app_name, output_path)
+            plot_earl_phases(df, job_id, node_id, app_name, output_path)
+            plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path)
     else:
         for node_id in list_nodes:
-            plot_earl_states(df, node_id, job_id, "SPO")
-            plot_earl_phases(df, node_id, job_id, "SPO")
-            plot_earl_opt_accuracy(df, node_id, job_id, "SPO")
+            plot_earl_states(df, job_id, node_id, app_name, output_path)
+            plot_earl_phases(df, job_id, node_id, app_name, output_path)
+            plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path)
 
     # Close DB connection
     cursor.close()
@@ -284,9 +309,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('-j', '--jobid', type=int, required=True,
-                        help='Filter the data by the Job ID.')
+                        help='filter the data by the job_id (required).')
     parser.add_argument('-n', '--nodeid',
-                        help='Filter the data by the node..')
+                        help='filter the data by the node_id (optional)')
+    parser.add_argument('-a', '--appname',
+                        help='specifies the application name for graph titles (optional)')
+    parser.add_argument('-o', '--output',
+                        help='specifies the output path where the generated graphs will be stored (optional)')
     args = parser.parse_args()
 
-    main(args.jobid, args.nodeid)
+    main(args.jobid, args.nodeid, args.appname, args.output)
