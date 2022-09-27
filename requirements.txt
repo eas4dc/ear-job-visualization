@@ -56,3 +56,4 @@ urllib3==1.26.6
 webencodings==0.5.1
 yarl==1.6.3
 zipp==3.5.0
+mysql-connector
