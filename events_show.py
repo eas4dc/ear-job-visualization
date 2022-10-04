@@ -42,15 +42,15 @@ def db_conn(ear_conf_file):
     return conn, cursor
 
 
-def query(cursor, job_id, node_id=None):
+def query(cursor, job_id, step_id, node_id=None):
     if node_id == None:
         event_query = "SELECT job_id, node_id, timestamp as time_stamp, event_type, freq as event_class "\
-                      "FROM Events WHERE job_id = %s AND event_type in (4,5,8)"
-        cursor.execute(event_query, (job_id,))
+                      "FROM Events WHERE job_id = %s AND step_id = %s AND event_type in (4,5,8)"
+        cursor.execute(event_query, (job_id, step_id))
     else:
         event_query = "SELECT job_id, node_id, timestamp as time_stamp, event_type, freq as event_clas "\
-                      "FROM Events WHERE job_id = %s AND node_id = %s  AND event_type in (4,5,8)"
-        cursor.execute(event_query, (job_id, node_id))
+                      "FROM Events WHERE job_id = %s AND step_id = %s AND node_id = %s  AND event_type in (4,5,8)"
+        cursor.execute(event_query, (job_id, step_id, node_id))
 
     values = cursor.fetchall()
     columns = [col[0] for col in cursor.description]
@@ -59,6 +59,7 @@ def query(cursor, job_id, node_id=None):
 
     # Add elapsed time to dataframe
     t0 = df.time_stamp[0]
+    t0 = 1663571176
     elapsed_time = []
     for i in df.index:
         elapsed_time.append(df.time_stamp[i] - t0)
@@ -108,7 +109,8 @@ def plot_earl_states(df, job_id, node_id, app_name, output_path, show=False):
             time_start = time_end
 
     bounds[last_event][0].append(time_start)
-    bounds[last_event][1].append(df4.elapsed_time[i]+1)
+    #bounds[last_event][1].append(df4.elapsed_time[i]+1)
+    bounds[last_event][1].append(471)
 
     # The graphs
     fig, ax = plt.subplots(1, 1, figsize=[16, 1.8])
@@ -126,7 +128,7 @@ def plot_earl_states(df, job_id, node_id, app_name, output_path, show=False):
         ll.set_linewidth(10)
 
     ax.set_ylim(-0.25, 0.75)
-    ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
+    #ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
     ax.set_yticks([])
     ax.set_ylabel(node_id, rotation=0, labelpad=18, fontsize=13)
 
@@ -157,7 +159,7 @@ def plot_earl_phases(df, job_id, node_id, app_name, output_path, show=False):
         5: ["APP_CPU_GPU", "gray"],
     }
 
-    # Data for event_type = 4: "earl_state",
+    # Data for event_type = 5: "earl_phase",
     df5 = df.loc[(df.node_id==node_id) & (df.event_type==5)]
 
     # For start and end time during the application period
@@ -177,7 +179,8 @@ def plot_earl_phases(df, job_id, node_id, app_name, output_path, show=False):
             time_start = time_end
 
     bounds[last_event][0].append(time_start)
-    bounds[last_event][1].append(df5.elapsed_time[i]+1)
+    #bounds[last_event][1].append(df5.elapsed_time[i]+1)
+    bounds[last_event][1].append(471)
 
     # The graphs
     fig, ax = plt.subplots(1, 1, figsize=[16, 1.8])
@@ -195,7 +198,7 @@ def plot_earl_phases(df, job_id, node_id, app_name, output_path, show=False):
         ll.set_linewidth(10)
 
     ax.set_ylim(-0.25, 0.75)
-    ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
+    #ax.set_xlim(df.elapsed_time.to_list()[0], df.elapsed_time.to_list()[-1])
     ax.set_yticks([])
     ax.set_ylabel(node_id, rotation=0, labelpad=18, fontsize=13)
 
@@ -277,26 +280,26 @@ def plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path, show=Fals
         plt.savefig(fname=f"{output_path}/earl_opt_accuracy_{job_id}.{node_id}.png", bbox_inches="tight")
 
 
-def main(job_id, node_id=None,  app_name=None, output_path=None):
+def main(job_id, step_id, node_id=None, app_name=None, output_path=None):
     """ Entry method. """
     # Read ear.conf to get DB connection
     ear_etc_path = os.getenv("EAR_ETC")
     ear_conf_file = os.path.join(ear_etc_path, "ear/ear.conf")
 
     conn, cursor = db_conn(ear_conf_file)
-    df = query(cursor, job_id)
+    df = query(cursor, job_id, step_id, node_id)
 
     list_nodes = df.node_id.unique().tolist()
     if node_id:
         if node_id in list_nodes:
             plot_earl_states(df, job_id, node_id, app_name, output_path)
-            plot_earl_phases(df, job_id, node_id, app_name, output_path)
-            plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path)
+            #plot_earl_phases(df, job_id, node_id, app_name, output_path)
+            #plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path)
     else:
         for node_id in list_nodes:
             plot_earl_states(df, job_id, node_id, app_name, output_path)
             plot_earl_phases(df, job_id, node_id, app_name, output_path)
-            plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path)
+            #plot_earl_opt_accuracy(df, job_id, node_id, app_name, output_path)
 
     # Close DB connection
     cursor.close()
@@ -310,6 +313,8 @@ if __name__ == '__main__':
 
     parser.add_argument('-j', '--jobid', type=int, required=True,
                         help='filter the data by the job_id (required).')
+    parser.add_argument('-s', '--stepid', type=int, required=True,
+                        help='filter the data by the step_id (required).')
     parser.add_argument('-n', '--nodeid',
                         help='filter the data by the node_id (optional)')
     parser.add_argument('-a', '--appname',
@@ -318,4 +323,4 @@ if __name__ == '__main__':
                         help='specifies the output path where the generated graphs will be stored (optional)')
     args = parser.parse_args()
 
-    main(args.jobid, args.nodeid, args.appname, args.output)
+    main(args.jobid, args.stepid, args.nodeid, args.appname, args.output)
