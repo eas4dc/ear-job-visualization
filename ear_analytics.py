@@ -6,8 +6,8 @@ import os
 import sys
 import subprocess
 import time
-import timeit
 import re
+import json
 
 from heapq import merge
 
@@ -192,7 +192,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
-            step_id=None, output_fn=None):
+            step_id=None, output_fn=None,
+            events_config_fn=None):
 
     # Read the Job data
 
@@ -284,15 +285,13 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     if df_events is not None and not \
             np.array_equal(node_info, np.sort(pd.unique(df_events.node_id))):
         print('ERROR: Loops and events data do not have'
-                f' the same node information: {node_info}, {np.sort(pd.unique(df_events.node_id))}')
+              f' the same node information: {node_info}, {np.sort(pd.unique(df_events.node_id))}')
         return
     else:
         n_nodes = node_info.size
 
         f_time = (np.max(df_job.end_time) -
                   np.min(df_job.start_time)) * 1000000
-
-        print(f'Your trace file have a duration time of {f_time} microseconds.')
 
     # #### Getting Application info
     #
@@ -568,57 +567,76 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     # Adding the categorical labels for EAR events.
     if df_events is not None:
-        # Hardcoded configuration: TODO: Read from a JSON
-        ear_event_types_values = {
-                'earl_state': {
-                    0: 'NO_PERIOD',
-                    1: 'FIRST_ITERATION',
-                    2: 'EVALUATING_LOCAL_SIGNATURE',
-                    3: 'SIGNATURE_STABLE',
-                    4: 'PROJECTION_ERROR',
-                    5: 'RECOMPUTING_N',
-                    6: 'SIGNATURE_HAS_CHANGED',
-                    7: 'TEST_LOOP',
-                    8: 'EVALUATING_GLOBAL_SIGNATURE',
-                },
-                'policy_accuracy': {
-                    0: 'OPT_NOT_READY',
-                    1: 'OPT_OK',
-                    2: 'OPT_NOT_OK',
-                    3: 'OPT_TRY_AGAIN',
-                },
-                'earl_phase': {
-                    1: 'APP_COMP_BOUND',
-                    2: 'APP_MPI_BOUND',
-                    3: 'APP_IO_BOUND',
-                    4: 'APP_BUSY_WAITING',
-                    5: 'APP_CPU_GPU',
-                },
-            }
 
-        for ear_event_type in ear_event_types_values:
-            idx = paraver_conf_file_str.find(ear_event_type)
-            if idx != -1:
-                values_str = ('\n'
-                              .join([f'{key}\t{value}'
-                                     for key, value
-                                     in (ear_event_types_values[ear_event_type]
-                                         .items()
-                                         )
-                                     ]
-                                    )
-                              )
+        # Set the default config filename if the user didn't give one
+        if events_config_fn is None:
+            events_config_fn = 'events_config.json'
 
-                st_p = idx + len(ear_event_type)
+        if (os.path.isfile(events_config_fn)):
+            """
+            # Hardcoded configuration - version 0:
+            ear_event_types_values = {
+                    'earl_state': {
+                        0: 'NO_PERIOD',
+                        1: 'FIRST_ITERATION',
+                        2: 'EVALUATING_LOCAL_SIGNATURE',
+                        3: 'SIGNATURE_STABLE',
+                        4: 'PROJECTION_ERROR',
+                        5: 'RECOMPUTING_N',
+                        6: 'SIGNATURE_HAS_CHANGED',
+                        7: 'TEST_LOOP',
+                        8: 'EVALUATING_GLOBAL_SIGNATURE',
+                    },
+                    'policy_accuracy': {
+                        0: 'OPT_NOT_READY',
+                        1: 'OPT_OK',
+                        2: 'OPT_NOT_OK',
+                        3: 'OPT_TRY_AGAIN',
+                    },
+                    'earl_phase': {
+                        1: 'APP_COMP_BOUND',
+                        2: 'APP_MPI_BOUND',
+                        3: 'APP_IO_BOUND',
+                        4: 'APP_BUSY_WAITING',
+                        5: 'APP_CPU_GPU',
+                    },
+                }
+            """
+            with open(events_config_fn, 'r', encoding='utf-8') as f:
+                try:
+                    ear_event_types_values = json.load(f)
 
-                paraver_conf_file_str = ('\n'
-                                         .join([paraver_conf_file_str[:st_p],
-                                                'VALUES',
-                                                values_str,
-                                                paraver_conf_file_str[st_p+1:]
-                                                ]
-                                               )
-                                         )
+                    for ear_event_type in ear_event_types_values:
+                        idx = paraver_conf_file_str.find(ear_event_type)
+                        if idx != -1:
+                            values_str = ('\n'
+                                          .join([f'{key}\t{value}'
+                                                 for key, value
+                                                 in (ear_event_types_values[ear_event_type]
+                                                     .items()
+                                                     )
+                                                 ]
+                                                )
+                                          )
+
+                            st_p = idx + len(ear_event_type)
+
+                            paraver_conf_file_str = ('\n'
+                                                     .join([paraver_conf_file_str[:st_p],
+                                                            'VALUES',
+                                                            values_str,
+                                                            paraver_conf_file_str[st_p+1:]
+                                                            ]
+                                                           )
+                                                     )
+                except json.JSONDecodeError as json_err:
+                    print(f'ERROR: Decoding {json_err.doc}\n'
+                          f'Message: "{json_err.msg}" at line '
+                          f'{json_err.lineno} column {json_err.colno}.')
+
+        else:
+            print('WARNING: Events configuration file '
+                  f'{events_config_fn} does not exist.')
 
     with open('.'.join([output_fn, 'pcf']), 'w') as pcf_file:
         pcf_file.write(paraver_conf_file_str)
@@ -685,11 +703,15 @@ def parser_action_closure(conf_metrics):
 
             events_data_path = None
             if args.events:
-                events_data_path = os.path.join(head_path,
-                                                '.'.join(['events', tail_path]))
+                events_data_path = (os.path
+                                    .join(head_path,
+                                          '.'.join(['events', tail_path])))
 
-            ear2prv(out_jobs_path, args.input_file, events_data_fn=events_data_path,
-                    job_id=args.jobid, step_id=args.stepid, output_fn=args.output)
+            # Call ear2prv format method
+            ear2prv(out_jobs_path, args.input_file,
+                    events_data_fn=events_data_path, job_id=args.jobid,
+                    step_id=args.stepid, output_fn=args.output,
+                    events_config_fn=args.events_config)
 
         if csv_generated and not args.keep_csv:
             os.system(f'rm {input_file}')
@@ -781,6 +803,11 @@ def build_parser(conf_metrics):
     events_help_str = 'Include EAR events in the trace fille.'
     ear2prv_group_args.add_argument('-e', '--events', action='store_true',
                                     help=events_help_str)
+
+    events_config_help_str = ('Specify a (JSON formatted) file with event'
+                              ' types categories. Default: events_config.json')
+    ear2prv_group_args.add_argument('--events_config', action='store_true',
+                                    help=events_config_help_str)
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
