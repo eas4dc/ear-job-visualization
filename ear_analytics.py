@@ -207,7 +207,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                 .assign(
                     # Paraver works with integers
                     CPI=lambda df: df.CPI * 1000000,
-                    TIME=lambda df: df.TIME * 1000000,  # ear ITER_TIME_SEC
+                    ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,  # ear ITER_TIME_SEC
                     IO_MBS=lambda df: df.IO_MBS * 1000000,
                     # Paraver works at microsecond granularity
                     time=lambda df: (df.TIMESTAMP -
@@ -221,7 +221,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                 .join(pd.Series(dtype=np.int64, name='gpu_util'))
                 .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
                 .astype(
-                    {'TIME': np.int64,  # ear4.2 ITER_TIME_SEC
+                    {'ITER_TIME_SEC': np.int64,  # ear4.2 ITER_TIME_SEC
                      'CPI': np.int64,
                      'TPI': np.int64,
                      'MEM_GBS': np.int64,
@@ -233,7 +233,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                      'GFLOPS': np.int64,
                      })
                 # Drop unnecessary columns
-                .drop(['FIRST_EVENT', 'LEVEL', 'SIZE',
+                .drop(['LOOPID', 'LOOP_NEST_LEVEL', 'LOOP_SIZE',
                        'TIMESTAMP', 'start_time', 'end_time'], axis=1)
                 )
 
@@ -486,7 +486,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     # #### Loops configuration file
 
     cols_regex = re.compile(r'((GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d))'
-                            r'|JOBID|STEPID|NODENAME|FIRST_EVENT|LEVEL|SIZE'
+                            r'|JOBID|STEPID|NODENAME|LOOPID|LOOP_NEST_LEVEL|LOOP_SIZE'
                             r'|TIMESTAMP|start_time|end_time|time|task_id'
                             r'|app_id|app_name')
     metrics = (df_loops
