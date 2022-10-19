@@ -1,0 +1,26 @@
+{
+	"earl_state": {
+		"0": "NO_PERIOD",
+		"1": "FIRST_ITERATION",
+		"2": "EVALUATING_LOCAL_SIGNATURE",
+		"3": "SIGNATURE_STABLE",
+		"4": "PROJECTION_ERROR",
+		"5": "RECOMPUTING_N",
+		"6": "SIGNATURE_HAS_CHANGED",
+		"7": "TEST_LOOP",
+		"8": "EVALUATING_GLOBAL_SIGNATURE"
+	},
+	"optim_accuracy": {
+		"0": "OPT_NOT_READY",
+		"1": "OPT_OK",
+		"2": "OPT_NOT_OK",
+		"3": "OPT_TRY_AGAIN"
+	},
+	"earl_phase": {
+		"1": "APP_COMP_BOUND",
+		"2": "APP_MPI_BOUND",
+		"3": "APP_IO_BOUND",
+		"4": "APP_BUSY_WAITING",
+		"5": "APP_CPU_GPU"
+	}
+}
