@@ -754,16 +754,13 @@ def build_parser(conf_metrics):
                         'runtime (static images) or ear2prv (using paraver '
                         'tool).')
 
-    parser.add_argument('--input_file', help=('Specifies the input file(s) '
+    parser.add_argument('--input-file', help=('Specifies the input file(s) '
                                               'name(s) to read data from.'))
 
-    parser.add_argument('-j', '--jobid', type=int, required=True,
+    parser.add_argument('-j', '--job-id', type=int, required=True,
                         help='Filter the data by the Job ID.')
-    parser.add_argument('-s', '--stepid', type=int, required=True,
+    parser.add_argument('-s', '--step-id', type=int, required=True,
                         help='Filter the data by the Step ID.')
-    parser.add_argument('-n', '--node',
-                        help=('Filter the data by the node '
-                              '(used ONLY for phase visualisation).'))
 
     # ONLY for runtime format
     runtime_group_args = parser.add_argument_group('`runtime` format options')
@@ -778,17 +775,22 @@ def build_parser(conf_metrics):
                                     help='Set the resulting figure title '
                                     '(Only valid with runtime format).')
 
-    runtime_group_args.add_argument('-r', '--relative_range',
+    runtime_group_args.add_argument('-r', '--relative-range',
                                     action='store_true',
                                     help='Use the relative range of a metric '
                                     'over the trace data to build the '
                                     'gradient.')
 
-    runtime_group_args.add_argument('-l', '--horizontal_legend',
+    runtime_group_args.add_argument('-l', '--horizontal-legend',
                                     action='store_true',
                                     help='Display the legend horizontally. '
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
+
+    runtime_group_args.add_argument('-n', '--node',
+                                    help=('Filter the data by the node '
+                                          '(used ONLY for phase visualisation).')
+                                    )
 
     metrics_help_str = ('Space separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
@@ -806,7 +808,7 @@ def build_parser(conf_metrics):
 
     events_config_help_str = ('Specify a (JSON formatted) file with event'
                               ' types categories. Default: events_config.json')
-    ear2prv_group_args.add_argument('--events_config', help=events_config_help_str)
+    ear2prv_group_args.add_argument('--events-config', help=events_config_help_str)
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
