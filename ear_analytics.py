@@ -42,12 +42,6 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         df.columns = df.columns.to_flat_index()
         return df
 
-    for m in args.metrics:
-        if m not in list(mtrcs.metrics.keys()):
-            print("error: argument -m/--metrics: invalid choice: ", m)
-            print("choose from:", list(mtrcs.metrics.keys()))
-            return
-
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
           .assign(
@@ -692,6 +686,12 @@ def parser_action_closure(conf_metrics):
             csv_generated = True
 
         if args.format == "runtime":
+            for m in args.metrics:
+                if m not in list(conf_metrics.metrics.keys()):
+                    print("error: argument -m/--metrics: invalid choice: ", m)
+                    print("choose from:", list(conf_metrics.metrics.keys()))
+                    return
+
             runtime(args.input_file, conf_metrics, args.metrics,
                     args.relative_range, args.save, args.title, args.jobid,
                     args.stepid, args.output, args.horizontal_legend)
