@@ -16,7 +16,7 @@ def read_data(file_path, sep=';'):
     def load_files(filenames, base_path=None, sep=sep):
         for filename in filenames:
             if base_path:
-                path_file = base_path + '/' + filename
+                path_file = os.path.join(base_path, filename)
             else:
                 path_file = filename
             yield pd.read_csv(path_file, sep=sep)
