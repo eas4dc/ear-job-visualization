@@ -2,7 +2,7 @@
 
 A tool to automatically read and visualise data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) framework.
 **ear-analytics** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
-The visualisation target it to show runtime metrics collected by the EAR Library in a timeline graph.
+The visualisation target is to show runtime metrics collected by EARL in a timeline graph.
 By now this tool supports two kind of output formats: (I) directly generate images showing runtime information, (II) generate a trace file to be read by Paraver, a tool to visualise and manage trace data maintaned by the Barcelona Supercomputing Center's Tools team.
 
 For more information, read about [eacct](https://gitlab.bsc.es/ear_team/ear/-/wikis/Commands#energy-account-eacct) or [this guide](https://gitlab.bsc.es/ear_team/ear/-/wikis/User%20guide#running-jobs-with-ear) which shows you how to run jobs with EAR and how to obtain runtime data. You can find [here](https://tools.bsc.es/paraver) more information about how Paraver works.
@@ -23,9 +23,8 @@ You can install the requirements directly or use the *requirements.txt* file giv
 
 ### Installation
 
-`$ git clone`
-
 ```
+$ git clone
 $ python -m pip install -U pip
 $ python -m pip install -r requirements.txt
 ```
