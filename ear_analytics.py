@@ -21,6 +21,8 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
+from pylatex import Document, Figure
+
 from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
 from common.utils import filter_df, list_str
@@ -78,23 +80,27 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                                 freq='10S').union(m_data.index)
 
         m_data = m_data.reindex(new_idx).bfill()
+        # print(m_data.head())
 
         m_data_array = m_data.values.transpose()
 
-        x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
+        # x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
 
         # Create the resulting figure for current metric
-        fig = plt.figure(figsize=[19.2, 0.5 * len(m_data.columns)])
+        # fig = plt.figure(figsize=[19.2, 0.5 * len(m_data.columns)])
+        fig = plt.figure()
 
         # We use a grid layout to easily insert the gradient legend
         if not horizontal_legend:
             grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                               width_ratios=(9.5, 0.5), hspace=0, wspace=0.04)
+                               width_ratios=(0.95, 0.05), hspace=0.0, wspace=0.04)
         else:
-            grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1, hspace=1)
-
+            height_ratios = [0.95 / len(m_data_array)
+                             if i < len(m_data_array) else 0.05
+                             for i in range(len(m_data_array) + 1)]
+            grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1, hspace=1.5, height_ratios=height_ratios)
             gs1 = GridSpecFromSubplotSpec(len(m_data_array), 1,
-                                          subplot_spec=grid_sp[0:-1])
+                                          subplot_spec=grid_sp[0:-1], hspace=0.0)
             gs2 = GridSpecFromSubplotSpec(1, 1, subplot_spec=grid_sp[-1])
 
         norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
@@ -128,14 +134,30 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                             weight='bold', labelpad=len(ylabel_text) * 4)
 
             data = np.array(m_data_array[i], ndmin=2)
+            # print("Shape:", data.shape)
 
+            # axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
+            #             norm=norm, aspect='auto',
+            #             extent=[x_lim[0], x_lim[1], 0, 1])
             axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                        norm=norm, aspect='auto',
-                        extent=[x_lim[0], x_lim[1], 0, 1])
-            axes.set_xlim(x_lim[0], x_lim[1])
+                        norm=norm, aspect='auto')
+            # axes.set_xlim(x_lim[0], x_lim[1])
 
-            date_format = mdates.DateFormatter('%x: %H:%M:%S')
-            axes.xaxis.set_major_formatter(date_format)
+            # date_format = mdates.DateFormatter('%x: %H:%M:%S')
+            # axes.xaxis.set_major_formatter(date_format)
+            # axes.set_xticks([0,1])
+            # print(plt.xticks())
+            mierda = [i - m_data.index[0] for i in m_data.index]
+            # print([i - m_data.index[0] for i in m_data.index])
+            # print('length:', len(mierda))
+
+            def format_fn(tick_val, tick_pos):
+                if i == len(m_data_array) - 1 and int(tick_val) in range(len(m_data_array[i])):
+                    return mierda[int(tick_val)].seconds
+                else:
+                    return ''
+            
+            axes.xaxis.set_major_formatter(format_fn)
 
             if i == 0:
                 tit = metric_name
@@ -148,11 +170,13 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                             tit = '-'.join([tit, str(step_id)])
                 axes.set_title(tit, weight='bold')
 
+            """
             if i < len(m_data_array) - 1:
                 axes.set_xticklabels([])
+            """
 
         if horizontal_legend:
-            plt.subplots_adjust(hspace=0.0)
+            # plt.subplots_adjust(hspace=0.0)
             col_bar_ax = fig.add_subplot(gs2[0, 0])
             fig.colorbar(cm.ScalarMappable(
                 cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
@@ -165,6 +189,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
         if not save:
             plt.show()
+
+            doc = Document('basic')
+            with doc.create(Figure(position='htbp')) as plot:
+                plot.add_plot()
+                doc.generate_pdf(clean_tex=False)
+
             plt.pause(0.001)
         else:
             name = f'runtime_{metric_name}'
@@ -681,7 +711,7 @@ def parser_action_closure(conf_metrics):
 
         if args.input_file is None:
             # Action performing eacct command and storing csv files
-            input_file = eacct(args.format, args.jobid, args.stepid, args.events)
+            input_file = eacct(args.format, args.job_id, args.step_id, args.events)
             args.input_file = input_file
             csv_generated = True
 
@@ -693,8 +723,8 @@ def parser_action_closure(conf_metrics):
                     return
 
             runtime(args.input_file, conf_metrics, args.metrics,
-                    args.relative_range, args.save, args.title, args.jobid,
-                    args.stepid, args.output, args.horizontal_legend)
+                    args.relative_range, args.save, args.title, args.job_id,
+                    args.step_id, args.output, args.horizontal_legend)
 
         if args.format == "ear2prv":
             head_path, tail_path = os.path.split(args.input_file)
@@ -709,8 +739,8 @@ def parser_action_closure(conf_metrics):
 
             # Call ear2prv format method
             ear2prv(out_jobs_path, args.input_file,
-                    events_data_fn=events_data_path, job_id=args.jobid,
-                    step_id=args.stepid, output_fn=args.output,
+                    events_data_fn=events_data_path, job_id=args.job_id,
+                    step_id=args.step_id, output_fn=args.output,
                     events_config_fn=args.events_config)
 
         if csv_generated and not args.keep_csv:
@@ -818,7 +848,7 @@ def build_parser(conf_metrics):
                              ' given.')
 
     parser.add_argument('-k', '--keep-csv', action='store_true',
-                        help="Don't remove temporary csv files.")
+                        help='Don\'t remove temporary csv files.')
 
     parser.set_defaults(func=parser_action_closure(conf_metrics))
 
