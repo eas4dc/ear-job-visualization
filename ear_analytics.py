@@ -755,7 +755,8 @@ def build_parser(conf_metrics):
                         'tool).')
 
     parser.add_argument('--input-file', help=('Specifies the input file(s) '
-                                              'name(s) to read data from.'))
+                                              'name(s) to read data from. '
+                                              'It can be a path.'))
 
     parser.add_argument('-j', '--job-id', type=int, required=True,
                         help='Filter the data by the Job ID.')
@@ -772,14 +773,14 @@ def build_parser(conf_metrics):
                        help='Show the resulting figure (default).')
 
     runtime_group_args.add_argument('-t', '--title',
-                                    help='Set the resulting figure title '
-                                    '(Only valid with runtime format).')
+                                    help='Set the resulting figure title.')
 
     runtime_group_args.add_argument('-r', '--relative-range',
                                     action='store_true',
                                     help='Use the relative range of a metric '
                                     'over the trace data to build the '
-                                    'gradient.')
+                                    'gradient, instead of the manually '
+                                    'specified at config.ini file.')
 
     runtime_group_args.add_argument('-l', '--horizontal-legend',
                                     action='store_true',
@@ -816,8 +817,8 @@ def build_parser(conf_metrics):
                              'argument is only valid if `--save` flag is'
                              ' given.')
 
-    parser.add_argument('-k', '--keep_csv', action='store_true',
-                        help="Don't remove temorary csv files.")
+    parser.add_argument('-k', '--keep-csv', action='store_true',
+                        help="Don't remove temporary csv files.")
 
     parser.set_defaults(func=parser_action_closure(conf_metrics))
 
