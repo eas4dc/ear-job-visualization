@@ -806,8 +806,7 @@ def build_parser(conf_metrics):
 
     events_config_help_str = ('Specify a (JSON formatted) file with event'
                               ' types categories. Default: events_config.json')
-    ear2prv_group_args.add_argument('--events_config', action='store_true',
-                                    help=events_config_help_str)
+    ear2prv_group_args.add_argument('--events_config', help=events_config_help_str)
 
     parser.add_argument('-o', '--output',
                         help='Sets the output name. You can just set a path or'
