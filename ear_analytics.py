@@ -11,11 +11,12 @@ import json
 
 from heapq import merge
 
+# import matplotlib
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+# import matplotlib.pyplot as plt
 import colorcet as cc
+import proplot as pplt
 
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
@@ -27,6 +28,12 @@ from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
 from common.utils import filter_df, list_str
 
+# matplotlib.use('Agg')  # Not to use X server. For TravisCI.
+
+
+def create_metric_timeline_figure():
+    return
+
 
 def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             title=None, job_id=None, step_id=None, output=None,
@@ -36,7 +43,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     `req_metrics`.
 
     It also receives the `filename` to read data from,
-    and `mtrcs` supported by ear_analytics.
+    and `mtrcs` supported.
     """
 
     def join_metric_node(df):
@@ -47,6 +54,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
           .assign(
+                # Aggregate GPU data
                 avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
                 tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
                 avg_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').mean(axis=1),
@@ -61,7 +69,9 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
               )
           )
 
-    # Prepare x-axe range for iterations captured
+    # Compile a regex to check whether the requested metric is per GPU
+    gpu_metric_regex_str = r'(GFREQ|GUTIL|GPOWER|GMEMFREQ|GMEMUTIL)(\d)'
+    gpu_metric_regex = re.compile(gpu_metric_regex_str)
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
@@ -77,45 +87,68 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         m_data.index = pd.to_datetime(m_data.index, unit='s')
 
         new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
-                                freq='10S').union(m_data.index)
+                                freq='1S').union(m_data.index)
 
         m_data = m_data.reindex(new_idx).bfill()
-        # print(m_data.head())
 
         m_data_array = m_data.values.transpose()
 
-        # x_lim = mdates.date2num([m_data.index.min(), m_data.index.max()])
+        # Compute time deltas to be showed to
+        # the end user instead of an absolute timestamp.
+        time_deltas = [i - m_data.index[0] for i in m_data.index]
 
         # Create the resulting figure for current metric
-        # fig = plt.figure(figsize=[19.2, 0.5 * len(m_data.columns)])
-        fig = plt.figure()
 
-        # We use a grid layout to easily insert the gradient legend
+        fig_title = metric_name
+        if title:  # We preserve the title got by the user
+            fig_title = f'{title}: {metric_name}'
+        else:  # The default title: %metric-%job_id-%step_id
+            if job_id:
+                fig_title = '-'.join([fig_title, str(job_id)])
+                if step_id is not None:
+                    fig_title = '-'.join([fig_title, str(step_id)])
+
+        fig = pplt.figure(sharey=False, refaspect=20, suptitle=fig_title)
+
         if not horizontal_legend:
-            grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                               width_ratios=(0.95, 0.05), hspace=0.0, wspace=0.04)
+            grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=2,
+                                    width_ratios=(0.95, 0.05), hspace=0)
         else:
             height_ratios = [0.95 / len(m_data_array)
                              if i < len(m_data_array) else 0.05
                              for i in range(len(m_data_array) + 1)]
-            grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1, hspace=1.5, height_ratios=height_ratios)
-            gs1 = GridSpecFromSubplotSpec(len(m_data_array), 1,
-                                          subplot_spec=grid_sp[0:-1], hspace=0.0)
-            gs2 = GridSpecFromSubplotSpec(1, 1, subplot_spec=grid_sp[-1])
 
-        norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
+            grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=1,
+                                    height_ratios=height_ratios)
+
+        """
+        # We use a grid layout to easily insert the gradient legend
+        if not horizontal_legend:
+            grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
+                               width_ratios=(0.95, 0.05), hspace=0.0,
+                               wspace=0.04)
+        else:
+            height_ratios = [0.95 / len(m_data_array)
+                             if i < len(m_data_array) else 0.05
+                             for i in range(len(m_data_array) + 1)]
+
+            grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1,
+                               height_ratios=height_ratios, hspace=1.0)
+
+            gs1 = GridSpecFromSubplotSpec(len(m_data_array), 1,
+                                          subplot_spec=grid_sp[0:-1],
+                                          hspace=0.0)
+            gs2 = GridSpecFromSubplotSpec(1, 1, subplot_spec=grid_sp[-1])
+        """
+
         if rel_range:  # Relative range
             norm = Normalize(vmin=np.nanmin(m_data_array),
                              vmax=np.nanmax(m_data_array), clip=True)
-            # print(f'Using a gradient range of ({np.nanmin(m_data_array)}, '
-            #       f'{np.nanmax(m_data_array)}) for {metric_name}')
+        else:
+            norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
 
-        # Check if the requested metric is per GPU
-        gpu_metric_regex_str = r'(GFREQ|GUTIL|GPOWER|GMEMFREQ|GMEMUTIL)(\d)'
-        gpu_metric_regex = re.compile(gpu_metric_regex_str)
-
+        # Build the timeline for each vector of data
         for i, _ in enumerate(m_data_array):
-
             gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
 
             if gpu_metric_match:
@@ -125,40 +158,34 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 ylabel_text = m_data.columns[i][1]
 
             if not horizontal_legend:
-                axes = fig.add_subplot(grid_sp[i, 0], ylabel=ylabel_text)
+                axes = fig.add_subplot(grid_sp[i, 0])
             else:
-                axes = fig.add_subplot(gs1[i], ylabel=ylabel_text)
+                axes = fig.add_subplot(gs1[i])
 
-            axes.set_yticks([])
-            axes.set_ylabel(ylabel_text, rotation=0,
-                            weight='bold', labelpad=len(ylabel_text) * 4)
-
-            data = np.array(m_data_array[i], ndmin=2)
-            # print("Shape:", data.shape)
-
-            # axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-            #             norm=norm, aspect='auto',
-            #             extent=[x_lim[0], x_lim[1], 0, 1])
-            axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                        norm=norm, aspect='auto')
-            # axes.set_xlim(x_lim[0], x_lim[1])
-
-            # date_format = mdates.DateFormatter('%x: %H:%M:%S')
-            # axes.xaxis.set_major_formatter(date_format)
-            # axes.set_xticks([0,1])
-            # print(plt.xticks())
-            mierda = [i - m_data.index[0] for i in m_data.index]
-            # print([i - m_data.index[0] for i in m_data.index])
-            # print('length:', len(mierda))
+            # Below function maps each ticks
+            # with the corresponding elapsed time.
 
             def format_fn(tick_val, tick_pos):
-                if i == len(m_data_array) - 1 and int(tick_val) in range(len(m_data_array[i])):
-                    return mierda[int(tick_val)].seconds
+                if int(tick_val) in range(len(m_data_array[0])):
+                    return time_deltas[int(tick_val)].seconds
                 else:
                     return ''
-            
-            axes.xaxis.set_major_formatter(format_fn)
 
+            axes.format(xticklabels=format_fn, ylocator=[0.5], yticklabels=[ylabel_text])
+
+            # axes.set_yticks([])
+            # axes.set_ylabel(ylabel_text, rotation=0,
+            #                 weight='bold', labelpad=len(ylabel_text) * 4)
+
+            data = np.array(m_data_array[i], ndmin=2)
+
+            # Generate the timeline gradient
+            axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
+                        norm=norm, aspect='auto')
+
+            # axes.xaxis.set_major_formatter(format_fn)
+
+            """
             if i == 0:
                 tit = metric_name
                 if title:  # We preserve the title got by the user
@@ -169,10 +196,6 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                         if step_id is not None:
                             tit = '-'.join([tit, str(step_id)])
                 axes.set_title(tit, weight='bold')
-
-            """
-            if i < len(m_data_array) - 1:
-                axes.set_xticklabels([])
             """
 
         if horizontal_legend:
@@ -188,14 +211,13 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 cax=col_bar_ax)
 
         if not save:
-            plt.show()
+            pplt.show()
 
             doc = Document('basic')
+
             with doc.create(Figure(position='htbp')) as plot:
                 plot.add_plot()
                 doc.generate_pdf(clean_tex=False)
-
-            plt.pause(0.001)
         else:
             name = f'runtime_{metric_name}'
             if job_id:
@@ -210,9 +232,9 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 else:
                     name = output
 
-            print(f'storing figure at {name}.png')
+            print(f'storing figure {name}')
 
-            plt.savefig(fname=name, bbox_inches='tight', transparent=True)
+            fig.savefig(name)
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
@@ -237,7 +259,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                 .assign(
                     # Paraver works with integers
                     CPI=lambda df: df.CPI * 1000000,
-                    ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,  # ear ITER_TIME_SEC
+                    ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,
                     IO_MBS=lambda df: df.IO_MBS * 1000000,
                     # Paraver works at microsecond granularity
                     time=lambda df: (df.TIMESTAMP -
@@ -272,10 +294,12 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     df_events = None
 
     if events_data_fn:
+        cols_dict = {'JOBID': 'Job_id', 'STEPID': 'Step_id'}
+
         # By now events are in a space separated csv file.
         df_events = (read_data(events_data_fn, sep=r'\s+')
                      .pipe(filter_df, Job_id=job_id, Step_id=step_id)
-                     .merge(df_job.rename(columns={'JOBID': 'Job_id', 'STEPID': 'Step_id'}))
+                     .merge(df_job.rename(columns=cols_dict))
                      .assign(
                          # Paraver works at microsecond granularity
                          time=lambda df: (df.Timestamp -
@@ -309,7 +333,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     if df_events is not None and not \
             np.array_equal(node_info, np.sort(pd.unique(df_events.node_id))):
         print('ERROR: Loops and events data do not have'
-              f' the same node information: {node_info}, {np.sort(pd.unique(df_events.node_id))}')
+              f' the same node information: {node_info}, '
+              f'{np.sort(pd.unique(df_events.node_id))}')
         return
     else:
         n_nodes = node_info.size
@@ -516,9 +541,9 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     # #### Loops configuration file
 
     cols_regex = re.compile(r'((GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d))'
-                            r'|JOBID|STEPID|NODENAME|LOOPID|LOOP_NEST_LEVEL|LOOP_SIZE'
-                            r'|TIMESTAMP|start_time|end_time|time|task_id'
-                            r'|app_id|app_name')
+                            r'|JOBID|STEPID|NODENAME|LOOPID|LOOP_NEST_LEVEL|'
+                            r'LOOP_SIZE|TIMESTAMP|start_time|end_time|time|'
+                            r'task_id|app_id|app_name')
     metrics = (df_loops
                .drop(columns=df_loops.filter(regex=cols_regex).columns)
                .columns)
@@ -779,7 +804,7 @@ def build_parser(conf_metrics):
     parser.add_argument('--version', action='version', version='%(prog)s 4.1')
 
     parser.add_argument('--format', required=True,
-                        choices=['runtime', 'ear2prv'],
+                        choices=['runtime', 'ear2prv', 'job-summary'],
                         help='Build results according to chosen format: '
                         'runtime (static images) or ear2prv (using paraver '
                         'tool).')
