@@ -20,7 +20,6 @@ import proplot as pplt
 
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
-from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 
 from pylatex import Document, Figure
 
@@ -114,12 +113,19 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=2,
                                     width_ratios=(0.95, 0.05), hspace=0)
         else:
+            def metric_row(i):
+                return i < len(m_data_array)
+
             height_ratios = [0.95 / len(m_data_array)
-                             if i < len(m_data_array) else 0.05
+                             if metric_row(i) else 0.05
                              for i in range(len(m_data_array) + 1)]
 
-            grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=1,
-                                    height_ratios=height_ratios)
+            hspaces = [0 if metric_row(i + 1) else None
+                       for i in range(len(m_data_array))]
+
+            grid_sp = pplt.GridSpec(nrows=len(m_data_array) + 1, ncols=1,
+                                    hratios=height_ratios,
+                                    hspace=hspaces)
 
         """
         # We use a grid layout to easily insert the gradient legend
@@ -141,6 +147,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             gs2 = GridSpecFromSubplotSpec(1, 1, subplot_spec=grid_sp[-1])
         """
 
+        # Normalize values
+
         if rel_range:  # Relative range
             norm = Normalize(vmin=np.nanmin(m_data_array),
                              vmax=np.nanmax(m_data_array), clip=True)
@@ -160,7 +168,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             if not horizontal_legend:
                 axes = fig.add_subplot(grid_sp[i, 0])
             else:
-                axes = fig.add_subplot(gs1[i])
+                axes = fig.add_subplot(grid_sp[i])
 
             # Below function maps each ticks
             # with the corresponding elapsed time.
@@ -171,7 +179,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                 else:
                     return ''
 
-            axes.format(xticklabels=format_fn, ylocator=[0.5], yticklabels=[ylabel_text])
+            axes.format(xticklabels=format_fn, ylocator=[0.5],
+                        yticklabels=[ylabel_text])
 
             # axes.set_yticks([])
             # axes.set_ylabel(ylabel_text, rotation=0,
@@ -200,7 +209,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
         if horizontal_legend:
             # plt.subplots_adjust(hspace=0.0)
-            col_bar_ax = fig.add_subplot(gs2[0, 0])
+            col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
             fig.colorbar(cm.ScalarMappable(
                 cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
                 cax=col_bar_ax, orientation="horizontal")
