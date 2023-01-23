@@ -1,5 +1,3 @@
-# WARNING: This repository is outdated. Current maintaned version can be found [here](https://github.com/eas4dc/ear-job-analytics).
-
 # ear-analytics
 
 A tool to automatically read and visualise data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) framework.
