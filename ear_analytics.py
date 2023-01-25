@@ -21,17 +21,131 @@ import proplot as pplt
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 
-from pylatex import Document, Figure
-
 from common.io_api import read_data, read_ini
 from common.metrics import init_metrics
 from common.utils import filter_df, list_str
 
-# matplotlib.use('Agg')  # Not to use X server. For TravisCI.
+from pylatex import Document, Section, Tabularx
+
+from itertools import repeat
 
 
-def create_metric_timeline_figure():
-    return
+def join_metric_node(df):
+    "Given a DataFrame df, returns it flattening it's columns MultiIndex."
+    df.columns = df.columns.to_flat_index()
+    return df
+
+
+def job_summary_df(df):
+    """
+    Given a DataFrame df representing raw EAR data in long format,
+    i.e., eacct -l, returns a DataFrame with a summary of relevant metrics
+    aggregated.
+    """
+    grouped = (df
+               .assign(
+                   # Energy column
+                   energy=lambda x: x.DC_NODE_POWER_W * x.TIME_SEC,
+               )
+               .groupby('STEPID'))
+
+    grouped_avg_metrics = grouped[['AVG_CPUFREQ_KHZ',
+                                   'AVG_IMCFREQ_KHZ',
+                                   'TIME_SEC',
+                                   'DC_NODE_POWER_W',
+                                   'DRAM_POWER_W',
+                                   'PCK_POWER_W']].mean()
+    grouped_agg_metrics = grouped[['energy']].sum()
+
+    return pd.concat([grouped_avg_metrics, grouped_agg_metrics], axis=1)
+
+
+def agg_power_timeline(df):
+    metric_name = 'DC_NODE_POWER'
+    metric_filter = df.filter(regex=metric_name).columns
+    m_data = (df
+              .pivot_table(values=metric_filter,
+                           index='TIMESTAMP', columns='NODENAME')
+              .bfill()
+              .pipe(join_metric_node)
+              .agg(np.sum, axis=1)
+              )
+
+    m_data.index = pd.to_datetime(m_data.index, unit='s')
+
+    new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
+                            freq='1S').union(m_data.index)
+
+    m_data = m_data.reindex(new_idx).bfill()
+
+    m_data_array = m_data.values.transpose()
+
+    title = 'Aggregated DC Node Power (W)'
+    fig = pplt.figure(sharey=False, refaspect=20, suptitle=title)
+
+    grid_sp = pplt.GridSpec(nrows=2, ncols=1, hratios=[0.8, 0.2])
+
+    # Normalize values
+    norm = Normalize(vmin=np.nanmin(m_data_array),
+                     vmax=np.nanmax(m_data_array), clip=True)
+
+    # Compute time deltas to be showed to
+    # the end user instead of an absolute timestamp.
+    time_deltas = [i - m_data.index[0] for i in m_data.index]
+
+    # Build the timeline
+    axes = fig.add_subplot(grid_sp[0])
+
+    # Below function maps each ticks
+    # with the corresponding elapsed time.
+
+    def format_fn(tick_val, tick_pos):
+        if int(tick_val) in range(len(m_data_array)):
+            return time_deltas[int(tick_val)].seconds
+        else:
+            return ''
+
+    axes.format(xticklabels=format_fn, ylocator=[0.5], yticklabels=[''])
+
+    data = np.array(m_data_array, ndmin=2)
+
+    # Generate the timeline gradient
+    axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
+                norm=norm, aspect='auto')
+
+    col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
+
+    fig.colorbar(cm.ScalarMappable(
+        cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
+        cax=col_bar_ax, orientation="horizontal")
+
+    fig.savefig('agg_dc')
+
+
+def to_tex_tabular(df):
+    """
+    This function creates and returns a Tabular
+    with information provided by the DataFrame df.
+    """
+    header_str = '|'.join(repeat('X', df.shape[1]))
+    tabular = Tabularx(header_str, pos='b')
+    tabular.add_row(df.columns)
+    tabular.add_hline()
+    tabular.add_row(df.to_numpy().flatten())
+
+    return tabular.dumps()
+    # return tabular.dumps()
+
+
+def job_summary(df):
+    """
+    Generate a job summary.
+    """
+    doc = Document(geometry_options={"margin": "2.54cm"})
+    with doc.create(Section('Job summary')):
+        doc.append(to_tex_tabular(df))
+
+    doc.generate_pdf('basic')
 
 
 def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
@@ -44,11 +158,6 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     It also receives the `filename` to read data from,
     and `mtrcs` supported.
     """
-
-    def join_metric_node(df):
-        "Given a DataFrame df, returns it flattening it's columns MultiIndex."
-        df.columns = df.columns.to_flat_index()
-        return df
 
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
