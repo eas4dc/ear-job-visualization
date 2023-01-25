@@ -9,14 +9,12 @@ import time
 import re
 import json
 
-from heapq import merge
-
-# import matplotlib
 import pandas as pd
 import numpy as np
-# import matplotlib.pyplot as plt
 import colorcet as cc
 import proplot as pplt
+
+from heapq import merge
 
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
@@ -61,7 +59,12 @@ def job_summary_df(df):
 
 
 def agg_power_timeline(df):
-    metric_name = 'DC_NODE_POWER'
+    """
+    Generates and saves a timeline graph with the aggregated DC Node Power
+    reading data from the DataFrame df.
+    """
+
+    metric_name = 'DC_NODE_POWER_W'
     metric_filter = df.filter(regex=metric_name).columns
     m_data = (df
               .pivot_table(values=metric_filter,
@@ -159,32 +162,69 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     and `mtrcs` supported.
     """
 
+    # Regex strings to easily get GPU metrics
+
+    gpu_memutil_re = r'GPU\d_MEM_UTIL_PERC'
+    gpu_pwr_re = r'GPU\d_POWER_W'
+    gpu_freq_re = r'GPU\d_FREQ_KHZ'
+    gpu_memfreq_re = r'GPU\d_MEM_FREQ_KHZ'
+    gpu_util_re = r'GPU\d_UTIL_PERC'
+
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
           .assign(
+
                 # Aggregate GPU data
-                avg_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').mean(axis=1),
-                tot_gpu_pwr=lambda x: x.filter(regex=r'GPOWER\d').sum(axis=1),
-                avg_gpu_freq=lambda x: x.filter(regex=r'GFREQ\d').mean(axis=1),
-                avg_gpu_memfreq=lambda x: x.filter(regex=r'GMEMFREQ\d')
-                .mean(axis=1),
-                avg_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').mean(axis=1),
-                tot_gpu_util=lambda x: x.filter(regex=r'GUTIL\d').sum(axis=1),
-                avg_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d')
-                .mean(axis=1),
-                tot_gpu_memutil=lambda x: x.filter(regex=r'GMEMUTIL\d')
-                .sum(axis=1),
+
+                # Avg. GPU power
+                avg_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re).mean(axis=1),
+
+                # Agg. GPU power
+                tot_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re).sum(axis=1),
+
+                avg_gpu_freq=lambda x: x.filter(regex=gpu_freq_re)
+                .mean(axis=1),  # Avg. GPU freq
+
+                avg_gpu_memfreq=lambda x: x.filter(regex=gpu_memfreq_re)
+                .mean(axis=1),  # Avg. GPU mem freq
+
+                avg_gpu_util=lambda x: x.filter(regex=gpu_util_re)
+                .mean(axis=1),  # Avg. % GPU util
+
+                avg_gpu_memutil=lambda x: x.filter(regex=gpu_memutil_re)
+                .mean(axis=1),  # Avg. % GPu mem util
               )
           )
 
+    def get_metric_re(metric):
+        """
+        This function returns the metric
+        regex to filter then the DataFrame columns.
+
+        By now, only useful for GPU metrics. For non-GPU metrics,
+        the regex will be the same passed metric.
+
+        TODO: This approach can be more general to deal with configuration.
+        """
+        metric_res = {
+                'gpu_pwr': gpu_pwr_re,
+                'gpu_freq': gpu_freq_re,
+                'gpu_memfreq': gpu_memfreq_re,
+                'gpu_util': gpu_util_re,
+                'gpu_memutil': gpu_memutil_re,
+                }
+
+        return metric_res.get(metric, metric)
+
     # Compile a regex to check whether the requested metric is per GPU
-    gpu_metric_regex_str = r'(GFREQ|GUTIL|GPOWER|GMEMFREQ|GMEMUTIL)(\d)'
+    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+                            r'UTIL_PERC|MEM_UTIL_PERC)')
     gpu_metric_regex = re.compile(gpu_metric_regex_str)
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        metric_filter = df.filter(regex=metric_name).columns
+        metric_filter = df.filter(regex=get_metric_re(metric_name)).columns
 
         m_data = (df
                   .pivot_table(values=metric_filter,
@@ -235,26 +275,6 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             grid_sp = pplt.GridSpec(nrows=len(m_data_array) + 1, ncols=1,
                                     hratios=height_ratios,
                                     hspace=hspaces)
-
-        """
-        # We use a grid layout to easily insert the gradient legend
-        if not horizontal_legend:
-            grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                               width_ratios=(0.95, 0.05), hspace=0.0,
-                               wspace=0.04)
-        else:
-            height_ratios = [0.95 / len(m_data_array)
-                             if i < len(m_data_array) else 0.05
-                             for i in range(len(m_data_array) + 1)]
-
-            grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1,
-                               height_ratios=height_ratios, hspace=1.0)
-
-            gs1 = GridSpecFromSubplotSpec(len(m_data_array), 1,
-                                          subplot_spec=grid_sp[0:-1],
-                                          hspace=0.0)
-            gs2 = GridSpecFromSubplotSpec(1, 1, subplot_spec=grid_sp[-1])
-        """
 
         # Normalize values
 
@@ -825,22 +845,24 @@ def eacct(result_format, jobid, stepid, ear_events=False):
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Check the possible errors
-    if "Error getting ear.conf path" in res.stderr.decode('utf-8') :
+    if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
         print("Error getting ear.conf path")
         sys.exit()
 
-    if "No jobs found" in res.stdout.decode('utf-8') :
+    if "No jobs found" in res.stdout.decode('utf-8'):
         print(f"eacct: {jobid} No jobs found.")
         sys.exit()
 
-    if "No loops retrieved" in res.stdout.decode('utf-8') :
+    if "No loops retrieved" in res.stdout.decode('utf-8'):
         print(f"eacct: {jobid}.{stepid} No loops retrieved")
         sys.exit()
 
     # Request EAR events
     if ear_events:
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c', '.'.join(['events', csv_file])]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c',
+               '.'.join(['events', csv_file])]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
 
     # Return generated file
     return csv_file
