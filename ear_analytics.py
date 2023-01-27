@@ -45,17 +45,28 @@ def job_summary_df(df):
                    # Energy column
                    energy=lambda x: x.DC_NODE_POWER_W * x.TIME_SEC,
                )
-               .groupby('STEPID'))
+               # .transform(np.around, decimals=2)
+               .groupby(['JOBID', 'STEPID']))
 
-    grouped_avg_metrics = grouped[['AVG_CPUFREQ_KHZ',
-                                   'AVG_IMCFREQ_KHZ',
-                                   'TIME_SEC',
-                                   'DC_NODE_POWER_W',
-                                   'DRAM_POWER_W',
-                                   'PCK_POWER_W']].mean()
+    grouped_n_nodes = grouped[['NODENAME']].count()
+
+    grouped_avg_metrics = grouped[['TIME_SEC',
+                                   'DC_NODE_POWER_W']].mean()
+
+    # Frequencies need to be passed to GHz
+    grouped_avg_metrics_2 = (grouped[['AVG_CPUFREQ_KHZ',
+                                      'AVG_IMCFREQ_KHZ']]
+                             .mean().div(pow(10, 6)))
+
     grouped_agg_metrics = grouped[['energy']].sum()
 
-    return pd.concat([grouped_avg_metrics, grouped_agg_metrics], axis=1)
+    return (pd
+            .concat([grouped_n_nodes, grouped_avg_metrics,
+                     grouped_avg_metrics_2, grouped_agg_metrics], axis=1)
+            .transform(np.around, decimals=2)
+            .reset_index()
+            .assign(job_step=lambda x: f'{x.JOBID.values[0]}-{x.STEPID.values[0]}')
+            .drop(['JOBID', 'STEPID'], axis=1))[['job_step', 'NODENAME', 'TIME_SEC', 'AVG_CPUFREQ_KHZ', 'AVG_IMCFREQ_KHZ', 'DC_NODE_POWER_W', 'energy']]
 
 
 def agg_power_timeline(df):
@@ -70,6 +81,7 @@ def agg_power_timeline(df):
               .pivot_table(values=metric_filter,
                            index='TIMESTAMP', columns='NODENAME')
               .bfill()
+              .ffill()
               .pipe(join_metric_node)
               .agg(np.sum, axis=1)
               )
@@ -130,14 +142,26 @@ def to_tex_tabular(df):
     This function creates and returns a Tabular
     with information provided by the DataFrame df.
     """
-    header_str = '|'.join(repeat('X', df.shape[1]))
+
+    df = df
+
+    field_to_str = {
+            'job_step': 'Job-Step',
+            'NODENAME': '# Nodes',
+            'AVG_CPUFREQ_KHZ': 'CPU freq. (GHz)',
+            'AVG_IMCFREQ_KHZ': 'IMC freq. (GHz)',
+            'TIME_SEC': 'Time (s)',
+            'DC_NODE_POWER_W': 'Node Power (W)',
+            'energy': 'Energy (J)',
+            }
+
+    header_str = '|'.join(repeat('l', df.shape[1]))
     tabular = Tabularx(header_str, pos='b')
-    tabular.add_row(df.columns)
+    tabular.add_row(df.columns.map(lambda x: field_to_str[x]))  # String representation of fields
     tabular.add_hline()
-    tabular.add_row(df.to_numpy().flatten())
+    tabular.add_row(df.to_numpy().flatten())  # Numerical representation of fields
 
     return tabular.dumps()
-    # return tabular.dumps()
 
 
 def job_summary(df):
@@ -151,6 +175,158 @@ def job_summary(df):
     doc.generate_pdf('basic')
 
 
+def compute_gpu_metric_mean(df, gpu_metric_re):
+    """
+    This function computes the mean of the metric specified by
+    gpu_metric_re along different GPUs on the DataFrame df.
+    Moreover, it deals with GPU data at 0 values.
+    """
+    return (df
+            .filter(regex=gpu_metric_re)  # Get columns
+            .mask(lambda x: x == 0)  # zeroes as nan
+            .mean(axis=1))  # Mean between non-nan
+
+
+def agg_gpupower_timeline(df):
+
+    gpu_pwr_re = r'GPU\d_POWER'
+
+    df_agg_gpupwr = df.assign(tot_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re).sum(axis=1))
+    print(df_agg_gpupwr.tot_gpu_pwr)
+
+    metric_filter = df_agg_gpupwr.filter(regex='tot_gpu_pwr').columns
+
+    m_data = (df_agg_gpupwr
+              .pivot_table(values=metric_filter,
+                           index='TIMESTAMP', columns='NODENAME')
+              .bfill()
+              .ffill()
+              .pipe(join_metric_node)
+              .agg(np.sum, axis=1))
+
+    m_data.index = pd.to_datetime(m_data.index, unit='s')
+
+    new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
+                            freq='1S').union(m_data.index)
+
+    m_data = m_data.reindex(new_idx).bfill()
+    print(m_data)
+
+    m_data_array = m_data.values.transpose()
+
+    title = 'Aggregated GPU Power (W)'
+    fig = pplt.figure(sharey=False, refaspect=20, suptitle=title)
+
+    grid_sp = pplt.GridSpec(nrows=2, ncols=1, hratios=[0.8, 0.2])
+
+    # Normalize values
+    norm = Normalize(vmin=np.nanmin(m_data_array),
+                     vmax=np.nanmax(m_data_array), clip=True)
+
+    # Compute time deltas to be showed to
+    # the end user instead of an absolute timestamp.
+    time_deltas = [i - m_data.index[0] for i in m_data.index]
+
+    # Build the timeline
+    axes = fig.add_subplot(grid_sp[0])
+
+    # Below function maps each ticks
+    # with the corresponding elapsed time.
+
+    def format_fn(tick_val, tick_pos):
+        if int(tick_val) in range(len(m_data_array)):
+            return time_deltas[int(tick_val)].seconds
+        else:
+            return ''
+
+    axes.format(xticklabels=format_fn, ylocator=[0.5], yticklabels=[''])
+
+    data = np.array(m_data_array, ndmin=2)
+
+    # Generate the timeline gradient
+    axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
+                norm=norm, aspect='auto')
+
+    col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
+
+    fig.colorbar(cm.ScalarMappable(
+        cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
+        cax=col_bar_ax, orientation="horizontal")
+
+    fig.savefig('agg_gpu_pwr')
+
+
+def metric_regex(metric):
+    """
+    This function returns the metric's column name
+    regex to be used then in a filtering action .
+
+    By now, only useful for GPU metrics. For non-GPU metrics,
+    the regex will be the same passed metric.
+
+    TODO: This approach can be more general to deal with configuration.
+    """
+
+    # Regex strings to easily get GPU metrics
+    gpu_memutil_re = r'GPU(\d)_MEM_UTIL'
+    gpu_pwr_re = r'GPU(\d)_POWER'
+    gpu_freq_re = r'GPU(\d)_FREQ'
+    gpu_memfreq_re = r'GPU(\d)_MEM_FREQ'
+    gpu_util_re = r'GPU(\d)_UTIL'
+
+    metric_res = {
+            'GPU_PWR': gpu_pwr_re,
+            'GPU_FREQ': gpu_freq_re,
+            'GPU_MEMFREQ': gpu_memfreq_re,
+            'GPU_UTIL': gpu_util_re,
+            'GPU_MEMUTIL': gpu_memutil_re,
+            }
+
+    return metric_res.get(metric, metric)
+
+
+def compute_agg_gpu_data(df):
+    return (df
+            .assign(
+                tot_gpu_pwr=lambda x: (x.filter(regex=metric_regex('GPU_PWR'))
+                                        .sum(axis=1)),  # Agg. GPU power
+                avg_gpu_pwr=lambda x: (x.filter(regex=metric_regex('GPU_PWR'))
+                                        .mean(axis=1)),  # Avg. GPU power
+                avg_gpu_freq=lambda x: (x
+                                        .filter(regex=metric_regex('GPU_FREQ'))
+                                        .mean(axis=1)),  # Avg. GPU freq
+                avg_gpu_memfreq=lambda x: (x
+                                           .filter(regex=metric_regex('GPU_MEM'
+                                                                      'FREQ'))
+                                           .mean(axis=1)),  # Avg. GPU mem freq
+                avg_gpu_util=lambda x: (x
+                                        .filter(regex=metric_regex('GPU_UTIL'))
+                                        .mean(axis=1)),  # Avg. % GPU util
+                avg_gpu_memutil=lambda x: (x
+                                           .filter(regex=metric_regex('GPU_MEM'
+                                                                      'UTIL'))
+                                           .mean(axis=1)),  # Avg %GPU mem util
+                ))
+
+
+def filter_invalid_gpu_series(df):
+    """
+    Given a DataFrame with EAR data, filters those GPU
+    columns that not contain some of the job's GPUs used.
+    """
+    gpu_metric_regex_str = (r'GPU(\d)_(POWER|FREQ|MEM_FREQ|'
+                            r'UTIL|MEM_UTIL)')
+    return (df
+            .drop(df  # Erase GPU columns
+                  .filter(regex=gpu_metric_regex_str).columns, axis=1)
+            .join(df  # Join with valid GPU columns
+                  .filter(regex=gpu_metric_regex_str)
+                  .mask(lambda x: x == 0)  # All 0s as nan
+                  .dropna(axis=1, how='all')  # Drop nan columns
+                  .mask(lambda x: x.isna(), other=0),  # Return to 0s
+                  validate='one_to_one'))  # Validate the join operation
+
+
 def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             title=None, job_id=None, step_id=None, output=None,
             horizontal_legend=False):
@@ -162,69 +338,22 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     and `mtrcs` supported.
     """
 
-    # Regex strings to easily get GPU metrics
-
-    gpu_memutil_re = r'GPU\d_MEM_UTIL_PERC'
-    gpu_pwr_re = r'GPU\d_POWER_W'
-    gpu_freq_re = r'GPU\d_FREQ_KHZ'
-    gpu_memfreq_re = r'GPU\d_MEM_FREQ_KHZ'
-    gpu_util_re = r'GPU\d_UTIL_PERC'
-
     df = (read_data(filename)
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-          .assign(
-
-                # Aggregate GPU data
-
-                # Avg. GPU power
-                avg_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re).mean(axis=1),
-
-                # Agg. GPU power
-                tot_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re).sum(axis=1),
-
-                avg_gpu_freq=lambda x: x.filter(regex=gpu_freq_re)
-                .mean(axis=1),  # Avg. GPU freq
-
-                avg_gpu_memfreq=lambda x: x.filter(regex=gpu_memfreq_re)
-                .mean(axis=1),  # Avg. GPU mem freq
-
-                avg_gpu_util=lambda x: x.filter(regex=gpu_util_re)
-                .mean(axis=1),  # Avg. % GPU util
-
-                avg_gpu_memutil=lambda x: x.filter(regex=gpu_memutil_re)
-                .mean(axis=1),  # Avg. % GPu mem util
-              )
+          .pipe(filter_invalid_gpu_series)
+          .pipe(compute_agg_gpu_data)
           )
 
-    def get_metric_re(metric):
-        """
-        This function returns the metric
-        regex to filter then the DataFrame columns.
-
-        By now, only useful for GPU metrics. For non-GPU metrics,
-        the regex will be the same passed metric.
-
-        TODO: This approach can be more general to deal with configuration.
-        """
-        metric_res = {
-                'gpu_pwr': gpu_pwr_re,
-                'gpu_freq': gpu_freq_re,
-                'gpu_memfreq': gpu_memfreq_re,
-                'gpu_util': gpu_util_re,
-                'gpu_memutil': gpu_memutil_re,
-                }
-
-        return metric_res.get(metric, metric)
-
     # Compile a regex to check whether the requested metric is per GPU
-    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC)')
+    gpu_metric_regex_str = (r'GPU(\d)_(POWER|FREQ|MEM_FREQ|'
+                            r'UTIL|MEM_UTIL)')
     gpu_metric_regex = re.compile(gpu_metric_regex_str)
 
     for metric in req_metrics:
         metric_name = mtrcs.get_metric(metric).name
 
-        metric_filter = df.filter(regex=get_metric_re(metric_name)).columns
+        metric_filter = df.filter(regex=metric_regex(metric_name)).columns
+        print(metric, metric_name, metric_filter)
 
         m_data = (df
                   .pivot_table(values=metric_filter,
@@ -238,6 +367,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                                 freq='1S').union(m_data.index)
 
         m_data = m_data.reindex(new_idx).bfill()
+        print(m_data)
 
         m_data_array = m_data.values.transpose()
 
@@ -263,10 +393,13 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
                                     width_ratios=(0.95, 0.05), hspace=0)
         else:
             def metric_row(i):
+                """
+                returns whether row i corresponds to a metric timeline.
+                """
                 return i < len(m_data_array)
 
-            height_ratios = [0.95 / len(m_data_array)
-                             if metric_row(i) else 0.05
+            height_ratios = [0.8 / len(m_data_array)
+                             if metric_row(i) else 0.2
                              for i in range(len(m_data_array) + 1)]
 
             hspaces = [0 if metric_row(i + 1) else None
@@ -281,15 +414,18 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
         if rel_range:  # Relative range
             norm = Normalize(vmin=np.nanmin(m_data_array),
                              vmax=np.nanmax(m_data_array), clip=True)
+            print(np.nanmin(m_data_array), np.nanmax(m_data_array))
+            print(norm)
         else:
             norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
 
         # Build the timeline for each vector of data
         for i, _ in enumerate(m_data_array):
             gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
+            print(m_data.columns[i][0])
 
             if gpu_metric_match:
-                ylabel_text = (f'GPU{gpu_metric_match.group(2)}'
+                ylabel_text = (f'GPU{gpu_metric_match.group(1)}'
                                f' @ {m_data.columns[i][1]}')
             else:
                 ylabel_text = m_data.columns[i][1]
@@ -299,10 +435,11 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             else:
                 axes = fig.add_subplot(grid_sp[i])
 
-            # Below function maps each ticks
-            # with the corresponding elapsed time.
-
             def format_fn(tick_val, tick_pos):
+                """
+                Map each tick with the corresponding
+                elapsed time to label the timeline.
+                """
                 if int(tick_val) in range(len(m_data_array[0])):
                     return time_deltas[int(tick_val)].seconds
                 else:
@@ -311,30 +448,12 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             axes.format(xticklabels=format_fn, ylocator=[0.5],
                         yticklabels=[ylabel_text])
 
-            # axes.set_yticks([])
-            # axes.set_ylabel(ylabel_text, rotation=0,
-            #                 weight='bold', labelpad=len(ylabel_text) * 4)
-
             data = np.array(m_data_array[i], ndmin=2)
+            print(data)
 
             # Generate the timeline gradient
             axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
                         norm=norm, aspect='auto')
-
-            # axes.xaxis.set_major_formatter(format_fn)
-
-            """
-            if i == 0:
-                tit = metric_name
-                if title:  # We preserve the title got by the user
-                    tit = f'{title}: {metric_name}'
-                else:  # The default title: %metric-%job_id-%step_id
-                    if job_id:
-                        tit = '-'.join([tit, str(job_id)])
-                        if step_id is not None:
-                            tit = '-'.join([tit, str(step_id)])
-                axes.set_title(tit, weight='bold')
-            """
 
         if horizontal_legend:
             # plt.subplots_adjust(hspace=0.0)
@@ -350,12 +469,6 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
         if not save:
             pplt.show()
-
-            doc = Document('basic')
-
-            with doc.create(Figure(position='htbp')) as plot:
-                plot.add_plot()
-                doc.generate_pdf(clean_tex=False)
         else:
             name = f'runtime_{metric_name}'
             if job_id:
@@ -982,18 +1095,18 @@ def build_parser(conf_metrics):
                                     help='Display the legend horizontally. '
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
-
+    """
     runtime_group_args.add_argument('-n', '--node',
                                     help=('Filter the data by the node '
                                           '(used ONLY for phase visualisation).')
                                     )
+    """
 
-    metrics_help_str = ('Space separated list of case sensitive'
+    metrics_help_str = ('Comma separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
                         f'{", ".join(conf_metrics.metrics.keys())}'
                         )
     runtime_group_args.add_argument('-m', '--metrics', type=list_str,
-                                    default=['cpi', 'gbs', 'gflops'],
                                     help=metrics_help_str, metavar='metric')
 
     ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
