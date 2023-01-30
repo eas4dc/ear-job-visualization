@@ -1,7 +1,5 @@
 """ Util functions. """
 
-import pandas as pd
-
 
 def filter_df(data_f, **kwargs):
     """
@@ -18,32 +16,14 @@ def filter_df(data_f, **kwargs):
     return data_f.query(expr)
 
 
-def filter_by_job_step_app(data_f, job_id=None, step_id=None, app_id=None):
-    """
-    Filters the DataFrame `data_f` by `job_id`
-    and/or `step_id` and/or `app_id`.
-    DEPRECATED.
-    """
-
-    def mask(data_f, key, value):
-        if key in data_f.columns:
-            if value is not None:
-                return data_f[data_f[key] == value]
-        # print(f'{key} is not a column name')
-        return data_f
-
-    pd.DataFrame.mask = mask
-
-    return (data_f
-            .mask('APP_ID', app_id)
-            .mask('JOB_ID', job_id)
-            .mask('JID', job_id)
-            .mask('STEPID', step_id)
-            )
-
-
 def list_str(values):
     """
     Split the string `values` using comma as a separator.
     """
     return values.split(',')
+
+
+def join_metric_node(df):
+    "Given a DataFrame df, returns it flattening it's columns MultiIndex."
+    df.columns = df.columns.to_flat_index()
+    return df

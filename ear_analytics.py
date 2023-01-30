@@ -20,18 +20,12 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 
 from common.io_api import read_data, read_ini
-from common.metrics import init_metrics
-from common.utils import filter_df, list_str
+from common.metrics import init_metrics, get_metrics_conf
+from common.utils import filter_df, list_str, join_metric_node
 
 from pylatex import Document, Section, Tabularx
 
 from itertools import repeat
-
-
-def join_metric_node(df):
-    "Given a DataFrame df, returns it flattening it's columns MultiIndex."
-    df.columns = df.columns.to_flat_index()
-    return df
 
 
 def job_summary_df(df):
@@ -110,18 +104,6 @@ def job_summary(df):
         doc.append(to_tex_tabular(df))
 
     doc.generate_pdf('basic')
-
-
-def compute_gpu_metric_mean(df, gpu_metric_re):
-    """
-    This function computes the mean of the metric specified by
-    gpu_metric_re along different GPUs on the DataFrame df.
-    Moreover, it deals with GPU data at 0 values.
-    """
-    return (df
-            .filter(regex=gpu_metric_re)  # Get columns
-            .mask(lambda x: x == 0)  # zeroes as nan
-            .mean(axis=1))  # Mean between non-nan
 
 
 def metric_regex(metric):
@@ -424,7 +406,7 @@ def agg_iombs_timeline(df):
     fig.savefig('agg_iombs')
 
 
-def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
+def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
             title=None, job_id=None, step_id=None, output=None,
             horizontal_legend=False):
     """
@@ -432,7 +414,7 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
     `req_metrics`.
 
     It also receives the `filename` to read data from,
-    and `mtrcs` supported.
+    and `avail_metrics` supported.
     """
 
     df = (read_data(filename)
@@ -443,12 +425,17 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
 
     for metric in req_metrics:
         # Get a valid EAR column name
-        metric_name = mtrcs.get_metric(metric).name
+        # metric_name = avail_metrics.get_metric(metric).name
+        metric_config = avail_metrics[metric]
+        metric_name = metric_config['column_name']
 
         # Set the configured normalization if requested.
         norm = None
         if not rel_range:
-            norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
+            metric_range = metric_config['range']
+
+            norm = Normalize(vmin=metric_range[0],
+                             vmax=metric_range[1], clip=True)
 
         fig_title = metric
         if title:  # We preserve the title got by the user
@@ -976,57 +963,64 @@ def eacct(result_format, jobid, stepid, ear_events=False):
     return csv_file
 
 
-def parser_action_closure(conf_metrics):
+# def parser_action_closure(conf_metrics):
 
-    def parser_action(args):
+def parser_action(args):
 
-        csv_generated = False
+    csv_generated = False
 
-        if args.input_file is None:
-            # Action performing eacct command and storing csv files
-            input_file = eacct(args.format, args.job_id, args.step_id, args.events)
-            args.input_file = input_file
-            csv_generated = True
+    if args.input_file is None:
+        # Action performing eacct command and storing csv files
+        input_file = eacct(args.format, args.job_id, args.step_id, args.events)
+        args.input_file = input_file
+        csv_generated = True
 
-        if args.format == "runtime":
-            for m in args.metrics:
-                if m not in list(conf_metrics.metrics.keys()):
-                    print("error: argument -m/--metrics: invalid choice: ", m)
-                    print("choose from:", list(conf_metrics.metrics.keys()))
-                    return
+    if args.format == "runtime":
+        """
+        for m in args.metrics:
+            if m not in list(conf_metrics.metrics.keys()):
+                print("error: argument -m/--metrics: invalid choice: ", m)
+                print("choose from:", list(conf_metrics.metrics.keys()))
+                return
 
-            runtime(args.input_file, conf_metrics, args.metrics,
-                    args.relative_range, args.save, args.title, args.job_id,
-                    args.step_id, args.output, args.horizontal_legend)
+        runtime(args.input_file, conf_metrics, args.metrics,
+                args.relative_range, args.save, args.title, args.job_id,
+                args.step_id, args.output, args.horizontal_legend)
+        """
 
-        if args.format == "ear2prv":
-            head_path, tail_path = os.path.split(args.input_file)
-            out_jobs_path = os.path.join(head_path,
-                                         '.'.join(['out_jobs', tail_path]))
+        runtime(args.input_file, get_metrics_conf('config.json'), args.metrics,
+                args.relative_range, args.save, args.title, args.job_id,
+                args.step_id, args.output, args.horizontal_legend)
 
-            events_data_path = None
+    if args.format == "ear2prv":
+        head_path, tail_path = os.path.split(args.input_file)
+        out_jobs_path = os.path.join(head_path,
+                                     '.'.join(['out_jobs', tail_path]))
+
+        events_data_path = None
+        if args.events:
+            events_data_path = (os.path
+                                .join(head_path,
+                                      '.'.join(['events', tail_path])))
+
+        # Call ear2prv format method
+        ear2prv(out_jobs_path, args.input_file,
+                events_data_fn=events_data_path, job_id=args.job_id,
+                step_id=args.step_id, output_fn=args.output,
+                events_config_fn=args.events_config)
+
+    if csv_generated and not args.keep_csv:
+        os.system(f'rm {input_file}')
+        if args.format == 'ear2prv':
+            os.system(f'rm {out_jobs_path}')
             if args.events:
-                events_data_path = (os.path
-                                    .join(head_path,
-                                          '.'.join(['events', tail_path])))
+                os.system(f'rm {events_data_path}')
 
-            # Call ear2prv format method
-            ear2prv(out_jobs_path, args.input_file,
-                    events_data_fn=events_data_path, job_id=args.job_id,
-                    step_id=args.step_id, output_fn=args.output,
-                    events_config_fn=args.events_config)
-
-        if csv_generated and not args.keep_csv:
-            os.system(f'rm {input_file}')
-            if args.format == 'ear2prv':
-                os.system(f'rm {out_jobs_path}')
-                if args.events:
-                    os.system(f'rm {events_data_path}')
-
-    return parser_action
+#    return parser_action
 
 
-def build_parser(conf_metrics):
+# def build_parser(conf_metrics):
+def build_parser():
     """
     Given the used `conf_metrics`, returns a parser to
     read and check command line arguments.
@@ -1045,21 +1039,21 @@ def build_parser(conf_metrics):
     def formatter(prog):
         return CustomHelpFormatter(prog)
 
-    parser = argparse.ArgumentParser(prog='ear_analytics',
-                                     description='High level support for read '
-                                     'and visualize information files given by'
-                                     ' EARL.', formatter_class=formatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 4.1')
+    parser = argparse.ArgumentParser(description='''High level support for read
+                                     and visualize EAR job data.''',
+                                     formatter_class=formatter,
+                                     epilog='Contact: oriol.vidal@eas4dc.com')
+    parser.add_argument('--version', action='version', version='%(prog)s 4.2')
 
     parser.add_argument('--format', required=True,
                         choices=['runtime', 'ear2prv', 'job-summary'],
-                        help='Build results according to chosen format: '
-                        'runtime (static images) or ear2prv (using paraver '
-                        'tool).')
+                        help='''Build results according to chosen format:
+                        runtime (static images) or ear2prv (using paraver
+                        tool).''')
 
-    parser.add_argument('--input-file', help=('Specifies the input file(s) '
-                                              'name(s) to read data from. '
-                                              'It can be a path.'))
+    parser.add_argument('--input-file', help=('''Specifies the input file(s)
+                                              name(s) to read data from.
+                                              It can be a path.'''))
 
     parser.add_argument('-j', '--job-id', type=int, required=True,
                         help='Filter the data by the Job ID.')
@@ -1090,19 +1084,17 @@ def build_parser(conf_metrics):
                                     help='Display the legend horizontally. '
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
-    """
-    runtime_group_args.add_argument('-n', '--node',
-                                    help=('Filter the data by the node '
-                                          '(used ONLY for phase visualisation).')
-                                    )
-    """
+
+    config_metrics = get_metrics_conf('config.json')
 
     metrics_help_str = ('Comma separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
-                        f'{", ".join(conf_metrics.metrics.keys())}'
+                        f'{", ".join(config_metrics)}'
                         )
-    runtime_group_args.add_argument('-m', '--metrics', type=list_str,
-                                    help=metrics_help_str, metavar='metric')
+    runtime_group_args.add_argument('-m', '--metrics',
+                                    help=metrics_help_str,
+                                    metavar='metric', nargs='+',
+                                    choices=config_metrics.keys())
 
     ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
 
@@ -1123,7 +1115,8 @@ def build_parser(conf_metrics):
     parser.add_argument('-k', '--keep-csv', action='store_true',
                         help='Don\'t remove temporary csv files.')
 
-    parser.set_defaults(func=parser_action_closure(conf_metrics))
+    # parser.set_defaults(func=parser_action_closure(conf_metrics))
+    parser.set_defaults(func=parser_action)
 
     return parser
 
@@ -1132,10 +1125,11 @@ def main():
     """ Entry method. """
 
     # Read configuration file and init `metrics` data structure
-    conf_metrics = init_metrics(read_ini('config.ini'))
+    # conf_metrics = init_metrics(read_ini('config.ini'))
 
     # create the top-level parser
-    parser = build_parser(conf_metrics)
+    # parser = build_parser(conf_metrics)
+    parser = build_parser()
 
     args = parser.parse_args()
 

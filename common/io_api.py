@@ -1,9 +1,11 @@
 """ IO support for the tool set. """
 import os
 import configparser
-from itertools import dropwhile
 
 import pandas as pd
+
+from itertools import dropwhile
+from json import load
 
 
 def read_data(file_path, sep=';'):
@@ -61,3 +63,8 @@ def read_ini(filename):
     config = configparser.ConfigParser(converters={'tuple': parse_float_tuple})
     config.read(filename)
     return config
+
+
+def read_configuration(filename):
+    with open(filename) as fn:
+        return load(fn)

@@ -1,0 +1,122 @@
+{
+    "metrics" : {
+        "cpi" : {
+            "column_name" : "CPI",
+            "range" : [0.29, 0.69]
+        },
+        "gflops" : {
+            "column_name" : "GFLOPS",
+            "range" : [3, 60]
+        },
+        "avg_cpufreq" : {
+            "column_name" : "AVG_CPUFREQ_KHZ",
+            "range" : [1.5e6, 2.6e6]
+        },
+        "avg_imcfreq" : {
+            "column_name" : "AVG_IMCFREQ_KHZ",
+            "range" : [1.0e6, 2.4e6]
+        },
+        "def_freq" : {
+            "column_name" : "DEF_FREQ_KHZ",
+            "range" : [1.5e6, 2.6e6]
+        },
+        "tpi" : {
+            "column_name" : "TPI",
+            "range" : [1, 7]
+        },
+        "gbs" : {
+            "column_name" : "MEM_GBS",
+            "range" : [10, 60]
+        },
+        "dc_power" : {
+            "column_name" : "DC_NODE_POWER_W",
+            "range" : [300, 600]
+        },
+        "dram_power" : {
+            "column_name" : "DRAM_POWER_W",
+            "range" : [5, 50]
+        },
+        "pck_power" : {
+            "column_name" : "PCK_POWER_W", 
+            "range" : [100, 400]
+        },
+        "perc_mpi" : {
+            "column_name" : "PERC_MPI",
+            "range" : [0, 100]
+        },
+        "gpu_power" : {
+            "column_name" : "GPU(\\d)_POWER_W",
+            "range" : [100, 600]
+        },
+        "gpu_freq" : {
+            "column_name" : "GPU(\\d)_FREQ_KHZ",
+            "range" : [0.8e6, 1.41e6]
+        },
+        "gpu_memfreq" : {
+            "column_name" : "GPU(\\d)_MEM_FREQ_KHZ",
+            "range" : [0.8e6, 1.41e6]
+        },
+        "gpu_util" : {
+            "column_name" : "GPU(\\d)_UTIL_PERC",
+            "range" : [0, 100]
+        },
+        "gpu_memutil" : {
+            "column_name" : "GPU(\\d)_MEM_UTIL_PERC",
+            "range" : [0, 100]
+        },
+        "io_mbs" : {
+            "column_name" : "IO_MBS",
+            "range" : [0, 1000]
+        },
+        "avg_gpu_power" : {
+            "column_name" : "GPU(\\d)_POWER_W",
+            "range" : [50, 400]
+        },
+        "tot_gpu_power" : {
+            "column_name" : "GPU(\\d)_POWER_W",
+            "range" : [200, 1600]
+        },
+        "avg_gpu_freq" : {
+            "column_name" : "GPU(\\d)_FREQ_KHZ",
+            "range" : [0.8e6, 1.41e6]
+        },
+        "avg_gpu_memfreq" : {
+            "column_name" : "GPU(\\d)_MEM_FREQ_KHZ",
+            "range" : [0.8e6, 1.41e6]
+        },
+        "avg_gpu_util" : {
+            "column_name" : "GPU(\\d)_UTIL_PERC",
+            "range" : [0, 100]
+        },
+        "avg_gpu_memutil" : {
+            "column_name" : "GPU(\\d)_MEM_UTIL_PERC",
+            "range" : [0, 100]
+        }
+    },
+    "events" : {
+        "earl_state": {
+            "0": "NO_PERIOD",
+            "1": "FIRST_ITERATION",
+            "2": "EVALUATING_LOCAL_SIGNATURE",
+            "3": "SIGNATURE_STABLE",
+            "4": "PROJECTION_ERROR",
+            "5": "RECOMPUTING_N",
+            "6": "SIGNATURE_HAS_CHANGED",
+            "7": "TEST_LOOP",
+            "8": "EVALUATING_GLOBAL_SIGNATURE"
+        },
+        "optim_accuracy": {
+            "0": "OPT_NOT_READY",
+            "1": "OPT_OK",
+            "2": "OPT_NOT_OK",
+            "3": "OPT_TRY_AGAIN"
+        },
+        "earl_phase": {
+            "1": "APP_COMP_BOUND",
+            "2": "APP_MPI_BOUND",
+            "3": "APP_IO_BOUND",
+            "4": "APP_BUSY_WAITING",
+            "5": "APP_CPU_GPU"
+        }
+    }
+}

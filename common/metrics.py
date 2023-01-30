@@ -1,6 +1,7 @@
 """ Implementation of Metric and Metrics classes. """
 
 from matplotlib.colors import Normalize
+from .io_api import read_configuration
 
 
 class Metric:
@@ -46,6 +47,10 @@ class Metrics:
         for metric in self.metrics.values():
             res += (str(metric) + '\n')
         return res
+
+
+def get_metrics_conf(filename):
+    return read_configuration(filename)['metrics']
 
 
 def init_metrics(config):
