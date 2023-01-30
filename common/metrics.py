@@ -39,7 +39,7 @@ class Metrics:
 
     def get_metric(self, metric_key):
         """ Returns the metric corresponding to the key passed. """
-        return self.metrics[metric_key]
+        return self.metrics.get(metric_key. metric_key)
 
     def __str__(self):
         res = ''

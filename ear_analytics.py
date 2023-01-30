@@ -69,74 +69,6 @@ def job_summary_df(df):
             .drop(['JOBID', 'STEPID'], axis=1))[['job_step', 'NODENAME', 'TIME_SEC', 'AVG_CPUFREQ_KHZ', 'AVG_IMCFREQ_KHZ', 'DC_NODE_POWER_W', 'energy']]
 
 
-def agg_power_timeline(df):
-    """
-    Generates and saves a timeline graph with the aggregated DC Node Power
-    reading data from the DataFrame df.
-    """
-
-    metric_name = 'DC_NODE_POWER_W'
-    metric_filter = df.filter(regex=metric_name).columns
-    m_data = (df
-              .pivot_table(values=metric_filter,
-                           index='TIMESTAMP', columns='NODENAME')
-              .bfill()
-              .ffill()
-              .pipe(join_metric_node)
-              .agg(np.sum, axis=1)
-              )
-
-    m_data.index = pd.to_datetime(m_data.index, unit='s')
-
-    new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
-                            freq='1S').union(m_data.index)
-
-    m_data = m_data.reindex(new_idx).bfill()
-
-    m_data_array = m_data.values.transpose()
-
-    title = 'Aggregated DC Node Power (W)'
-    fig = pplt.figure(sharey=False, refaspect=20, suptitle=title)
-
-    grid_sp = pplt.GridSpec(nrows=2, ncols=1, hratios=[0.8, 0.2])
-
-    # Normalize values
-    norm = Normalize(vmin=np.nanmin(m_data_array),
-                     vmax=np.nanmax(m_data_array), clip=True)
-
-    # Compute time deltas to be showed to
-    # the end user instead of an absolute timestamp.
-    time_deltas = [i - m_data.index[0] for i in m_data.index]
-
-    # Build the timeline
-    axes = fig.add_subplot(grid_sp[0])
-
-    # Below function maps each ticks
-    # with the corresponding elapsed time.
-
-    def format_fn(tick_val, tick_pos):
-        if int(tick_val) in range(len(m_data_array)):
-            return time_deltas[int(tick_val)].seconds
-        else:
-            return ''
-
-    axes.format(xticklabels=format_fn, ylocator=[0.5], yticklabels=[''])
-
-    data = np.array(m_data_array, ndmin=2)
-
-    # Generate the timeline gradient
-    axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                norm=norm, aspect='auto')
-
-    col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
-
-    fig.colorbar(cm.ScalarMappable(
-        cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-        cax=col_bar_ax, orientation="horizontal")
-
-    fig.savefig('agg_dc')
-
-
 def to_tex_tabular(df):
     """
     This function creates and returns a Tabular
@@ -157,9 +89,14 @@ def to_tex_tabular(df):
 
     header_str = '|'.join(repeat('l', df.shape[1]))
     tabular = Tabularx(header_str, pos='b')
-    tabular.add_row(df.columns.map(lambda x: field_to_str[x]))  # String representation of fields
+
+    # String representation of fields
+    tabular.add_row(df.columns.map(lambda x: field_to_str[x]))
+
     tabular.add_hline()
-    tabular.add_row(df.to_numpy().flatten())  # Numerical representation of fields
+
+    # Numerical representation of fields
+    tabular.add_row(df.to_numpy().flatten())
 
     return tabular.dumps()
 
@@ -185,75 +122,6 @@ def compute_gpu_metric_mean(df, gpu_metric_re):
             .filter(regex=gpu_metric_re)  # Get columns
             .mask(lambda x: x == 0)  # zeroes as nan
             .mean(axis=1))  # Mean between non-nan
-
-
-def agg_gpupower_timeline(df):
-
-    gpu_pwr_re = r'GPU\d_POWER'
-
-    df_agg_gpupwr = df.assign(tot_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re).sum(axis=1))
-    print(df_agg_gpupwr.tot_gpu_pwr)
-
-    metric_filter = df_agg_gpupwr.filter(regex='tot_gpu_pwr').columns
-
-    m_data = (df_agg_gpupwr
-              .pivot_table(values=metric_filter,
-                           index='TIMESTAMP', columns='NODENAME')
-              .bfill()
-              .ffill()
-              .pipe(join_metric_node)
-              .agg(np.sum, axis=1))
-
-    m_data.index = pd.to_datetime(m_data.index, unit='s')
-
-    new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
-                            freq='1S').union(m_data.index)
-
-    m_data = m_data.reindex(new_idx).bfill()
-    print(m_data)
-
-    m_data_array = m_data.values.transpose()
-
-    title = 'Aggregated GPU Power (W)'
-    fig = pplt.figure(sharey=False, refaspect=20, suptitle=title)
-
-    grid_sp = pplt.GridSpec(nrows=2, ncols=1, hratios=[0.8, 0.2])
-
-    # Normalize values
-    norm = Normalize(vmin=np.nanmin(m_data_array),
-                     vmax=np.nanmax(m_data_array), clip=True)
-
-    # Compute time deltas to be showed to
-    # the end user instead of an absolute timestamp.
-    time_deltas = [i - m_data.index[0] for i in m_data.index]
-
-    # Build the timeline
-    axes = fig.add_subplot(grid_sp[0])
-
-    # Below function maps each ticks
-    # with the corresponding elapsed time.
-
-    def format_fn(tick_val, tick_pos):
-        if int(tick_val) in range(len(m_data_array)):
-            return time_deltas[int(tick_val)].seconds
-        else:
-            return ''
-
-    axes.format(xticklabels=format_fn, ylocator=[0.5], yticklabels=[''])
-
-    data = np.array(m_data_array, ndmin=2)
-
-    # Generate the timeline gradient
-    axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                norm=norm, aspect='auto')
-
-    col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
-
-    fig.colorbar(cm.ScalarMappable(
-        cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-        cax=col_bar_ax, orientation="horizontal")
-
-    fig.savefig('agg_gpu_pwr')
 
 
 def metric_regex(metric):
@@ -314,8 +182,8 @@ def filter_invalid_gpu_series(df):
     Given a DataFrame with EAR data, filters those GPU
     columns that not contain some of the job's GPUs used.
     """
-    gpu_metric_regex_str = (r'GPU(\d)_(POWER|FREQ|MEM_FREQ|'
-                            r'UTIL|MEM_UTIL)')
+    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+                            r'UTIL_PERC|MEM_UTIL_PERC)')
     return (df
             .drop(df  # Erase GPU columns
                   .filter(regex=gpu_metric_regex_str).columns, axis=1)
@@ -325,6 +193,235 @@ def filter_invalid_gpu_series(df):
                   .dropna(axis=1, how='all')  # Drop nan columns
                   .mask(lambda x: x.isna(), other=0),  # Return to 0s
                   validate='one_to_one'))  # Validate the join operation
+
+
+def metric_timeseries_by_node(df, metric):
+    return (df
+            .pivot_table(values=metric,
+                         index='TIMESTAMP', columns='NODENAME')
+            .bfill()
+            .pipe(join_metric_node)
+            )
+
+
+def metric_agg_timeseries(df, metric):
+    return(df
+           .pivot_table(values=metric,
+                        index='TIMESTAMP', columns='NODENAME')
+           .bfill()
+           .ffill()
+           .pipe(join_metric_node)
+           .agg(np.sum, axis=1)
+           )
+
+
+def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
+                                 vertical_legend=False, granularity='node'):
+    """
+    TODO: fig_title maybe can be avoided here and set them on client's code.
+    """
+
+    metric_filter = df.filter(regex=metric_regex(metric)).columns
+
+    if granularity != 'app':
+        m_data = metric_timeseries_by_node(df, metric_filter)
+    else:
+        m_data = metric_agg_timeseries(df, metric_filter)
+
+    m_data.index = pd.to_datetime(m_data.index, unit='s')
+
+    new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
+                            freq='1S').union(m_data.index)
+
+    m_data = m_data.reindex(new_idx).bfill()
+
+    m_data_array = m_data.values.transpose()
+    if granularity == 'app':
+        m_data_array = m_data_array.reshape(1, m_data_array.shape[0])
+
+    print(m_data)
+
+    # Compute time deltas to be showed to
+    # the end user instead of an absolute timestamp.
+    time_deltas = [i - m_data.index[0] for i in m_data.index]
+
+    # Create the resulting figure for current metric
+
+    fig = pplt.figure(sharey=False, refaspect=20, suptitle=fig_title)
+
+    if vertical_legend:
+        grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=2,
+                                width_ratios=(0.95, 0.05), hspace=0)
+    else:
+        def metric_row(i):
+            """
+            returns whether row i corresponds to a metric timeline.
+            """
+            return i < len(m_data_array)
+
+        height_ratios = [0.8 / len(m_data_array)
+                         if metric_row(i) else 0.2
+                         for i in range(len(m_data_array) + 1)]
+
+        hspaces = [0 if metric_row(i + 1) else None
+                   for i in range(len(m_data_array))]
+
+        grid_sp = pplt.GridSpec(nrows=len(m_data_array) + 1, ncols=1,
+                                hratios=height_ratios,
+                                hspace=hspaces)
+
+    # Normalize values
+
+    if norm is None:  # Relative range
+        norm = Normalize(vmin=np.nanmin(m_data_array),
+                         vmax=np.nanmax(m_data_array), clip=True)
+
+    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+                            r'UTIL_PERC|MEM_UTIL_PERC)')
+    gpu_metric_regex = re.compile(gpu_metric_regex_str)
+
+    for i, _ in enumerate(m_data_array):
+        if granularity != 'app':
+            gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
+
+            if gpu_metric_match:
+                ylabel_text = (f'GPU{gpu_metric_match.group(1)}'
+                               f' @ {m_data.columns[i][1]}')
+            else:
+                ylabel_text = m_data.columns[i][1]
+        else:
+            ylabel_text = ''
+
+        if vertical_legend:
+            axes = fig.add_subplot(grid_sp[i, 0])
+        else:
+            axes = fig.add_subplot(grid_sp[i])
+
+        def format_fn(tick_val, tick_pos):
+            """
+            Map each tick with the corresponding
+            elapsed time to label the timeline.
+            """
+            values_range = range(len(m_data_array[0]))
+
+            if int(tick_val) in values_range:
+                return time_deltas[int(tick_val)].seconds
+            else:
+                return ''
+
+        axes.format(xticklabels=format_fn, ylocator=[0.5],
+                    yticklabels=[ylabel_text])
+
+        data = np.array(m_data_array[i], ndmin=2)
+
+        # Generate the timeline gradient
+        axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
+                    norm=norm, aspect='auto')
+
+    if not vertical_legend:
+        col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
+        fig.colorbar(cm.ScalarMappable(
+            cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
+            cax=col_bar_ax, orientation="horizontal")
+    else:
+        col_bar_ax = fig.add_subplot(grid_sp[:, 1])
+        fig.colorbar(cm.ScalarMappable(
+            cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
+            cax=col_bar_ax)
+
+    return fig
+
+
+def agg_gbs_timeline(df):
+    """
+    Build and save a timeline with the aggregated memory bandwidth.
+    """
+    title = 'Aggregated memory bandwidth (GB/s)'
+
+    fig = generate_metric_timeline_fig(df, 'MEM_GBS',
+                                       fig_title=title, granularity='app')
+    fig.savefig('agg_gbs')
+
+
+def agg_gflops_timeline(df):
+    """
+    Build and save a timeline with the aggregated GFlop/s.
+    """
+    title = 'Aggregated CPU GFlop/s'
+
+    fig = generate_metric_timeline_fig(df, 'GFLOPS',
+                                       fig_title=title, granularity='app')
+    fig.savefig('agg_gflops')
+
+
+def agg_dcpower_timeline(df):
+    title = 'Aggregated DC Node Power (W)'
+
+    fig = generate_metric_timeline_fig(df, 'DC_NODE_POWER_W',
+                                       fig_title=title, granularity='app')
+    fig.savefig('agg_dcpower')
+
+
+def agg_gpupower_timeline(df):
+    title = 'Aggregated GPU Power (W)'
+
+    gpu_pwr_re = r'GPU\d_POWER'
+
+    df_agg_gpupwr = (df.assign(tot_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re)
+                                                      .sum(axis=1)))
+
+    fig = generate_metric_timeline_fig(df_agg_gpupwr, 'tot_gpu_pwr',
+                                       fig_title=title, granularity='app')
+    fig.savefig('agg_gpupower')
+
+
+def cpi_timeline(df):
+    title = 'Cycles per Instruction'
+
+    fig = generate_metric_timeline_fig(df, 'CPI',
+                                       fig_title=title)
+    fig.savefig('runtime_cpi')
+
+
+def gbs_timeline(df):
+    title = 'Memory bandwidth (GB/s)'
+
+    fig = generate_metric_timeline_fig(df, 'MEM_GBS',
+                                       fig_title=title)
+    fig.savefig('runtime_gbs')
+
+
+def gflops_timeline(df):
+    title = 'CPU GFlop/s'
+
+    fig = generate_metric_timeline_fig(df, 'GFLOPS',
+                                       fig_title=title)
+    fig.savefig('runtime_gflops')
+
+
+def avgcpufreq_timeline(df):
+    title = 'Avg. CPU frequency (kHz)'
+
+    fig = generate_metric_timeline_fig(df, 'AVG_CPUFREQ_KHZ',
+                                       fig_title=title)
+    fig.savefig('runtime_avgcpufreq')
+
+
+def gpuutil_timeline(df):
+    title = 'GPU utilization (%)'
+
+    norm = Normalize(vmin=0, vmax=100, clip=True)
+    fig = generate_metric_timeline_fig(filter_invalid_gpu_series(df),
+                                       'GPU_UTIL', norm=norm, fig_title=title)
+    fig.savefig('runtime_gpuutil')
+
+
+def agg_iombs_timeline(df):
+    title = 'Aggregated I/O throughput (MB/s)'
+
+    fig = generate_metric_timeline_fig(df, 'IO_MBS',
+                                       fig_title=title, granularity='app')
+    fig.savefig('agg_iombs')
 
 
 def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
@@ -344,133 +441,29 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
           .pipe(compute_agg_gpu_data)
           )
 
-    # Compile a regex to check whether the requested metric is per GPU
-    gpu_metric_regex_str = (r'GPU(\d)_(POWER|FREQ|MEM_FREQ|'
-                            r'UTIL|MEM_UTIL)')
-    gpu_metric_regex = re.compile(gpu_metric_regex_str)
-
     for metric in req_metrics:
+        # Get a valid EAR column name
         metric_name = mtrcs.get_metric(metric).name
 
-        metric_filter = df.filter(regex=metric_regex(metric_name)).columns
-        print(metric, metric_name, metric_filter)
+        # Set the configured normalization if requested.
+        norm = None
+        if not rel_range:
+            norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
 
-        m_data = (df
-                  .pivot_table(values=metric_filter,
-                               index='TIMESTAMP', columns='NODENAME')
-                  .bfill()
-                  .pipe(join_metric_node)
-                  )
-        m_data.index = pd.to_datetime(m_data.index, unit='s')
-
-        new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
-                                freq='1S').union(m_data.index)
-
-        m_data = m_data.reindex(new_idx).bfill()
-        print(m_data)
-
-        m_data_array = m_data.values.transpose()
-
-        # Compute time deltas to be showed to
-        # the end user instead of an absolute timestamp.
-        time_deltas = [i - m_data.index[0] for i in m_data.index]
-
-        # Create the resulting figure for current metric
-
-        fig_title = metric_name
+        fig_title = metric
         if title:  # We preserve the title got by the user
-            fig_title = f'{title}: {metric_name}'
+            fig_title = f'{title}: {metric}'
         else:  # The default title: %metric-%job_id-%step_id
             if job_id:
                 fig_title = '-'.join([fig_title, str(job_id)])
                 if step_id is not None:
                     fig_title = '-'.join([fig_title, str(step_id)])
 
-        fig = pplt.figure(sharey=False, refaspect=20, suptitle=fig_title)
+        fig = generate_metric_timeline_fig(df, metric_name, norm=norm,
+                                           fig_title=fig_title)
 
-        if not horizontal_legend:
-            grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=2,
-                                    width_ratios=(0.95, 0.05), hspace=0)
-        else:
-            def metric_row(i):
-                """
-                returns whether row i corresponds to a metric timeline.
-                """
-                return i < len(m_data_array)
-
-            height_ratios = [0.8 / len(m_data_array)
-                             if metric_row(i) else 0.2
-                             for i in range(len(m_data_array) + 1)]
-
-            hspaces = [0 if metric_row(i + 1) else None
-                       for i in range(len(m_data_array))]
-
-            grid_sp = pplt.GridSpec(nrows=len(m_data_array) + 1, ncols=1,
-                                    hratios=height_ratios,
-                                    hspace=hspaces)
-
-        # Normalize values
-
-        if rel_range:  # Relative range
-            norm = Normalize(vmin=np.nanmin(m_data_array),
-                             vmax=np.nanmax(m_data_array), clip=True)
-            print(np.nanmin(m_data_array), np.nanmax(m_data_array))
-            print(norm)
-        else:
-            norm = mtrcs.get_metric(metric).norm_func()  # Absolute range
-
-        # Build the timeline for each vector of data
-        for i, _ in enumerate(m_data_array):
-            gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
-            print(m_data.columns[i][0])
-
-            if gpu_metric_match:
-                ylabel_text = (f'GPU{gpu_metric_match.group(1)}'
-                               f' @ {m_data.columns[i][1]}')
-            else:
-                ylabel_text = m_data.columns[i][1]
-
-            if not horizontal_legend:
-                axes = fig.add_subplot(grid_sp[i, 0])
-            else:
-                axes = fig.add_subplot(grid_sp[i])
-
-            def format_fn(tick_val, tick_pos):
-                """
-                Map each tick with the corresponding
-                elapsed time to label the timeline.
-                """
-                if int(tick_val) in range(len(m_data_array[0])):
-                    return time_deltas[int(tick_val)].seconds
-                else:
-                    return ''
-
-            axes.format(xticklabels=format_fn, ylocator=[0.5],
-                        yticklabels=[ylabel_text])
-
-            data = np.array(m_data_array[i], ndmin=2)
-            print(data)
-
-            # Generate the timeline gradient
-            axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                        norm=norm, aspect='auto')
-
-        if horizontal_legend:
-            # plt.subplots_adjust(hspace=0.0)
-            col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
-            fig.colorbar(cm.ScalarMappable(
-                cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-                cax=col_bar_ax, orientation="horizontal")
-        else:
-            col_bar_ax = fig.add_subplot(grid_sp[:, 1])
-            fig.colorbar(cm.ScalarMappable(
-                cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-                cax=col_bar_ax)
-
-        if not save:
-            pplt.show()
-        else:
-            name = f'runtime_{metric_name}'
+        if save:
+            name = f'runtime_{metric}'
             if job_id:
                 name = '-'.join([name, str(job_id)])
                 if step_id is not None:
@@ -486,6 +479,8 @@ def runtime(filename, mtrcs, req_metrics, rel_range=False, save=False,
             print(f'storing figure {name}')
 
             fig.savefig(name)
+        else:
+            fig.show()
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
