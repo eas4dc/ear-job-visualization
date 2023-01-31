@@ -544,7 +544,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
                 .join(pd.Series(dtype=np.int64, name='gpu_util'))
                 .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
                 .astype(
-                    {'ITER_TIME_SEC': np.int64,  # ear4.2 ITER_TIME_SEC
+                    {'ITER_TIME_SEC': np.int64,
                      'CPI': np.int64,
                      'TPI': np.int64,
                      'MEM_GBS': np.int64,
@@ -592,6 +592,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     # a Paraver thread). It's needed to know how eacct command handles the
     # resulting header when there is a different number of GPUs for each
     # job-step requested.
+    # [UPDATE: Now, eacct has a column for all EAR supported GPUs even that GPUx
+    # has no data.]
     #
     # It is also assumed that both events and loops are from the same Job-step,
     # executed on the same node set..
@@ -676,7 +678,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         total_task_cnt += n_tasks
 
         # An EAR GPU is a Paraver thread
-        gpu_info = df_app.filter(regex='GPOWER').columns
+        gpu_info = df_app.filter(regex=r'GPU\d_POWER_W').columns
         n_threads = gpu_info.size
 
         # We accumulate the number of GPUs (paraver threads)
