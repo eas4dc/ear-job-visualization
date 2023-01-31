@@ -19,11 +19,12 @@ from heapq import merge
 from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 
-from common.io_api import read_data, read_ini
-from common.metrics import init_metrics, get_metrics_conf
-from common.utils import filter_df, list_str, join_metric_node
+from common.io_api import read_data
+from common.metrics import get_metrics_conf
+from common.utils import filter_df, join_metric_node
 
-from pylatex import Document, Section, Tabularx
+from pylatex import Tabular
+from pylatex.utils import bold
 
 from itertools import repeat
 
@@ -33,6 +34,9 @@ def job_summary_df(df):
     Given a DataFrame df representing raw EAR data in long format,
     i.e., eacct -l, returns a DataFrame with a summary of relevant metrics
     aggregated.
+
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
     """
     grouped = (df
                .assign(
@@ -45,31 +49,49 @@ def job_summary_df(df):
     grouped_n_nodes = grouped[['NODENAME']].count()
 
     grouped_avg_metrics = grouped[['TIME_SEC',
-                                   'DC_NODE_POWER_W']].mean()
+                                   'DC_NODE_POWER_W',
+                                   'MEM_GBS',
+                                   'CPI',
+                                   'IO_MBS',
+                                   'PERC_MPI']].mean()
+    grouped_gflops_w = (grouped
+                        .assign(
+                            lambda x: x['CPU-GFLOPS'] / x['DC_NODE_POWER_W']
+                         )).mean()
 
     # Frequencies need to be passed to GHz
     grouped_avg_metrics_2 = (grouped[['AVG_CPUFREQ_KHZ',
-                                      'AVG_IMCFREQ_KHZ']]
+                                      'AVG_IMCFREQ_KHZ',
+                                      'DEF_FREQ_KHZ']]
                              .mean().div(pow(10, 6)))
 
     grouped_agg_metrics = grouped[['energy']].sum()
 
     return (pd
             .concat([grouped_n_nodes, grouped_avg_metrics,
-                     grouped_avg_metrics_2, grouped_agg_metrics], axis=1)
+                     grouped_avg_metrics_2, grouped_gflops_w,
+                     grouped_agg_metrics], axis=1)
             .transform(np.around, decimals=2)
             .reset_index()
-            .assign(job_step=lambda x: f'{x.JOBID.values[0]}-{x.STEPID.values[0]}')
-            .drop(['JOBID', 'STEPID'], axis=1))[['job_step', 'NODENAME', 'TIME_SEC', 'AVG_CPUFREQ_KHZ', 'AVG_IMCFREQ_KHZ', 'DC_NODE_POWER_W', 'energy']]
+            .assign(job_step=lambda x: (f'{x.JOBID.values[0]}-'
+                                        '{x.STEPID.values[0]}'))
+            .drop(['JOBID', 'STEPID'], axis=1))[['job_step',
+                                                 'NODENAME',
+                                                 'TIME_SEC',
+                                                 'AVG_CPUFREQ_KHZ',
+                                                 'AVG_IMCFREQ_KHZ',
+                                                 'DC_NODE_POWER_W',
+                                                 'energy']].transpose()
 
 
 def to_tex_tabular(df):
     """
     This function creates and returns a Tabular
     with information provided by the DataFrame df.
-    """
 
-    df = df
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
+    """
 
     field_to_str = {
             'job_step': 'Job-Step',
@@ -81,103 +103,116 @@ def to_tex_tabular(df):
             'energy': 'Energy (J)',
             }
 
-    header_str = '|'.join(repeat('l', df.shape[1]))
-    tabular = Tabularx(header_str, pos='b')
+    header_str = '|'.join(repeat('l', 2))
+    tabular = Tabular(header_str, pos='b')
 
-    # String representation of fields
-    tabular.add_row(df.columns.map(lambda x: field_to_str[x]))
+    df_index = df.index
+    df_values = list(df.index.map(lambda x: df.loc[x][0]))
+    for field, value in zip(df_index, df_values):
+        tabular.add_row(bold(field_to_str[field]), value)
+        tabular.add_hline()
 
-    tabular.add_hline()
-
-    # Numerical representation of fields
-    tabular.add_row(df.to_numpy().flatten())
-
-    return tabular.dumps()
+    tabular.generate_tex('job_summary')
 
 
 def job_summary(df):
     """
     Generate a job summary.
-    """
     doc = Document(geometry_options={"margin": "2.54cm"})
     with doc.create(Section('Job summary')):
         doc.append(to_tex_tabular(df))
 
     doc.generate_pdf('basic')
+    """
 
 
-def metric_regex(metric):
+def metric_regex(metric, metrics_conf):
     """
     This function returns the metric's column name
     regex to be used then in a filtering action .
-
-    By now, only useful for GPU metrics. For non-GPU metrics,
-    the regex will be the same passed metric.
-
-    TODO: This approach can be more general to deal with configuration.
     """
 
-    # Regex strings to easily get GPU metrics
-    gpu_memutil_re = r'GPU(\d)_MEM_UTIL'
-    gpu_pwr_re = r'GPU(\d)_POWER'
-    gpu_freq_re = r'GPU(\d)_FREQ'
-    gpu_memfreq_re = r'GPU(\d)_MEM_FREQ'
-    gpu_util_re = r'GPU(\d)_UTIL'
-
-    metric_res = {
-            'GPU_PWR': gpu_pwr_re,
-            'GPU_FREQ': gpu_freq_re,
-            'GPU_MEMFREQ': gpu_memfreq_re,
-            'GPU_UTIL': gpu_util_re,
-            'GPU_MEMUTIL': gpu_memutil_re,
-            }
-
-    return metric_res.get(metric, metric)
+    return metrics_conf[metric]['column_name']
 
 
 def compute_agg_gpu_data(df):
+    metrics_conf = get_metrics_conf('config.json')
+
+    gpu_pwr_regex = metric_regex('gpu_power', metrics_conf)
+    gpu_freq_regex = metric_regex('gpu_freq', metrics_conf)
+    gpu_memfreq_regex = metric_regex('gpu_memfreq', metrics_conf)
+    gpu_util_regex = metric_regex('gpu_util', metrics_conf)
+    gpu_memutil_regex = metric_regex('gpu_memutil', metrics_conf)
+
     return (df
             .assign(
-                tot_gpu_pwr=lambda x: (x.filter(regex=metric_regex('GPU_PWR'))
+                tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_regex)
                                         .sum(axis=1)),  # Agg. GPU power
-                avg_gpu_pwr=lambda x: (x.filter(regex=metric_regex('GPU_PWR'))
+
+                avg_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_regex)
                                         .mean(axis=1)),  # Avg. GPU power
-                avg_gpu_freq=lambda x: (x
-                                        .filter(regex=metric_regex('GPU_FREQ'))
+
+                avg_gpu_freq=lambda x: (x.filter(regex=gpu_freq_regex)
                                         .mean(axis=1)),  # Avg. GPU freq
-                avg_gpu_memfreq=lambda x: (x
-                                           .filter(regex=metric_regex('GPU_MEM'
-                                                                      'FREQ'))
+
+                avg_gpu_memfreq=lambda x: (x.filter(regex=gpu_memfreq_regex)
                                            .mean(axis=1)),  # Avg. GPU mem freq
-                avg_gpu_util=lambda x: (x
-                                        .filter(regex=metric_regex('GPU_UTIL'))
+
+                avg_gpu_util=lambda x: (x.filter(regex=gpu_util_regex)
                                         .mean(axis=1)),  # Avg. % GPU util
-                avg_gpu_memutil=lambda x: (x
-                                           .filter(regex=metric_regex('GPU_MEM'
-                                                                      'UTIL'))
+
+                avg_gpu_memutil=lambda x: (x.filter(regex=gpu_memutil_regex)
                                            .mean(axis=1)),  # Avg %GPU mem util
                 ))
+
+
+def df_get_valid_gpu_data(df):
+    """
+    Returns a DataFrame with only valid GPU data.
+
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
+    """
+    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+                            r'UTIL_PERC|MEM_UTIL_PERC)')
+    return (df
+            .filter(regex=gpu_metric_regex_str)
+            .mask(lambda x: x == 0)  # All 0s as nan
+            .dropna(axis=1, how='all')  # Drop nan columns
+            .mask(lambda x: x.isna(), other=0))  # Return to 0s
+
+
+def df_has_gpu_data(df):
+    """
+    Returns whether the DataFrame df has valid GPU data.
+    """
+    return not df.pipe(df_get_valid_gpu_data).empty
 
 
 def filter_invalid_gpu_series(df):
     """
     Given a DataFrame with EAR data, filters those GPU
     columns that not contain some of the job's GPUs used.
+
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
     """
     gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
                             r'UTIL_PERC|MEM_UTIL_PERC)')
+
     return (df
             .drop(df  # Erase GPU columns
                   .filter(regex=gpu_metric_regex_str).columns, axis=1)
             .join(df  # Join with valid GPU columns
-                  .filter(regex=gpu_metric_regex_str)
-                  .mask(lambda x: x == 0)  # All 0s as nan
-                  .dropna(axis=1, how='all')  # Drop nan columns
-                  .mask(lambda x: x.isna(), other=0),  # Return to 0s
+                  .pipe(df_get_valid_gpu_data),
                   validate='one_to_one'))  # Validate the join operation
 
 
 def metric_timeseries_by_node(df, metric):
+    """
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
+    """
     return (df
             .pivot_table(values=metric,
                          index='TIMESTAMP', columns='NODENAME')
@@ -187,6 +222,10 @@ def metric_timeseries_by_node(df, metric):
 
 
 def metric_agg_timeseries(df, metric):
+    """
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
+    """
     return(df
            .pivot_table(values=metric,
                         index='TIMESTAMP', columns='NODENAME')
@@ -200,10 +239,11 @@ def metric_agg_timeseries(df, metric):
 def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                                  vertical_legend=False, granularity='node'):
     """
-    TODO: fig_title maybe can be avoided here and set them on client's code.
+    TODO: Pay attention here because this function depends directly
+    on EAR's output.
     """
 
-    metric_filter = df.filter(regex=metric_regex(metric)).columns
+    metric_filter = df.filter(regex=metric).columns
 
     if granularity != 'app':
         m_data = metric_timeseries_by_node(df, metric_filter)
@@ -220,8 +260,6 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     m_data_array = m_data.values.transpose()
     if granularity == 'app':
         m_data_array = m_data_array.reshape(1, m_data_array.shape[0])
-
-    print(m_data)
 
     # Compute time deltas to be showed to
     # the end user instead of an absolute timestamp.
@@ -320,7 +358,7 @@ def agg_gbs_timeline(df):
     """
     title = 'Aggregated memory bandwidth (GB/s)'
 
-    fig = generate_metric_timeline_fig(df, 'MEM_GBS',
+    fig = generate_metric_timeline_fig(df, 'gbs',
                                        fig_title=title, granularity='app')
     fig.savefig('agg_gbs')
 
@@ -331,7 +369,7 @@ def agg_gflops_timeline(df):
     """
     title = 'Aggregated CPU GFlop/s'
 
-    fig = generate_metric_timeline_fig(df, 'GFLOPS',
+    fig = generate_metric_timeline_fig(df, 'gflops',
                                        fig_title=title, granularity='app')
     fig.savefig('agg_gflops')
 
@@ -339,7 +377,7 @@ def agg_gflops_timeline(df):
 def agg_dcpower_timeline(df):
     title = 'Aggregated DC Node Power (W)'
 
-    fig = generate_metric_timeline_fig(df, 'DC_NODE_POWER_W',
+    fig = generate_metric_timeline_fig(df, 'dc_power',
                                        fig_title=title, granularity='app')
     fig.savefig('agg_dcpower')
 
@@ -360,7 +398,7 @@ def agg_gpupower_timeline(df):
 def cpi_timeline(df):
     title = 'Cycles per Instruction'
 
-    fig = generate_metric_timeline_fig(df, 'CPI',
+    fig = generate_metric_timeline_fig(df, 'cpi',
                                        fig_title=title)
     fig.savefig('runtime_cpi')
 
@@ -368,7 +406,7 @@ def cpi_timeline(df):
 def gbs_timeline(df):
     title = 'Memory bandwidth (GB/s)'
 
-    fig = generate_metric_timeline_fig(df, 'MEM_GBS',
+    fig = generate_metric_timeline_fig(df, 'gbs',
                                        fig_title=title)
     fig.savefig('runtime_gbs')
 
@@ -376,7 +414,7 @@ def gbs_timeline(df):
 def gflops_timeline(df):
     title = 'CPU GFlop/s'
 
-    fig = generate_metric_timeline_fig(df, 'GFLOPS',
+    fig = generate_metric_timeline_fig(df, 'gflops',
                                        fig_title=title)
     fig.savefig('runtime_gflops')
 
@@ -384,7 +422,7 @@ def gflops_timeline(df):
 def avgcpufreq_timeline(df):
     title = 'Avg. CPU frequency (kHz)'
 
-    fig = generate_metric_timeline_fig(df, 'AVG_CPUFREQ_KHZ',
+    fig = generate_metric_timeline_fig(df, 'avg_cpufreq',
                                        fig_title=title)
     fig.savefig('runtime_avgcpufreq')
 
@@ -976,17 +1014,6 @@ def parser_action(args):
         csv_generated = True
 
     if args.format == "runtime":
-        """
-        for m in args.metrics:
-            if m not in list(conf_metrics.metrics.keys()):
-                print("error: argument -m/--metrics: invalid choice: ", m)
-                print("choose from:", list(conf_metrics.metrics.keys()))
-                return
-
-        runtime(args.input_file, conf_metrics, args.metrics,
-                args.relative_range, args.save, args.title, args.job_id,
-                args.step_id, args.output, args.horizontal_legend)
-        """
 
         runtime(args.input_file, get_metrics_conf('config.json'), args.metrics,
                 args.relative_range, args.save, args.title, args.job_id,
@@ -1042,7 +1069,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description='''High level support for read
                                      and visualize EAR job data.''',
                                      formatter_class=formatter,
-                                     epilog='Contact: oriol.vidal@eas4dc.com')
+                                     epilog='Contact: support@eas4dc.com')
     parser.add_argument('--version', action='version', version='%(prog)s 4.2')
 
     parser.add_argument('--format', required=True,

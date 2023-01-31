@@ -69,27 +69,27 @@
             "range" : [0, 1000]
         },
         "avg_gpu_power" : {
-            "column_name" : "GPU(\\d)_POWER_W",
+            "column_name" : "avg_gpu_pwr",
             "range" : [50, 400]
         },
         "tot_gpu_power" : {
-            "column_name" : "GPU(\\d)_POWER_W",
+            "column_name" : "tot_gpu_pwr",
             "range" : [200, 1600]
         },
         "avg_gpu_freq" : {
-            "column_name" : "GPU(\\d)_FREQ_KHZ",
+            "column_name" : "avg_gpu_freq",
             "range" : [0.8e6, 1.41e6]
         },
         "avg_gpu_memfreq" : {
-            "column_name" : "GPU(\\d)_MEM_FREQ_KHZ",
+            "column_name" : "avg_gpu_memfreq",
             "range" : [0.8e6, 1.41e6]
         },
         "avg_gpu_util" : {
-            "column_name" : "GPU(\\d)_UTIL_PERC",
+            "column_name" : "avg_gpu_util",
             "range" : [0, 100]
         },
         "avg_gpu_memutil" : {
-            "column_name" : "GPU(\\d)_MEM_UTIL_PERC",
+            "column_name" : "avg_gpu_memutil",
             "range" : [0, 100]
         }
     },
