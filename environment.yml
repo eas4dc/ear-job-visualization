@@ -1,0 +1,10 @@
+name: ear-job-analytics
+channels:
+  - defaults
+dependencies:
+  - proplot
+  - pandas
+  - colorcet
+  - pylatex
+  - jinja2
+prefix: /home/ovidal/miniconda3/envs/ear-job-analytics
