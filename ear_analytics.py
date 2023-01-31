@@ -682,7 +682,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         n_threads = gpu_info.size
 
         # We accumulate the number of GPUs (paraver threads)
-        total_threads_cnt += n_threads
+        total_threads_cnt += (n_threads * n_tasks)
 
         # print(f'{appl_idx + 1}) {app_job}-{app_step}: {n_tasks} '
         #       f'task(s), nodes {appl_nodes}, {n_threads} GPUs (threads)\n')
@@ -780,12 +780,13 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     task_id_idx = columns.get_loc('task_id')
     timestamp_idx = columns.get_loc('time')
 
-    gpu_field_regex = re.compile(r'(GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d)')
-    gpu_field_map = {'GPOWER': 'gpu_power',
-                     'GFREQ': 'gpu_freq',
-                     'GMEMFREQ': 'gpu_mem_freq',
-                     'GUTIL': 'gpu_util',
-                     'GMEMUTIL': 'gpu_mem_util',
+    gpu_field_regex = re.compile(r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+                                 r'UTIL_PERC|MEM_UTIL_PERC)')
+    gpu_field_map = {'POWER_W': 'gpu_power',
+                     'FREQ_KHZ': 'gpu_freq',
+                     'MEM_FREQ_KHZ': 'gpu_mem_freq',
+                     'UTIL_PERC': 'gpu_util',
+                     'MEM_UTIL_PERC': 'gpu_mem_util',
                      }
 
     body_list = []
@@ -802,9 +803,9 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
             gpu_field = gpu_field_regex.search(metric)
             if gpu_field:
                 # Update the thread id based on the GPU number
-                thread_idx = int(gpu_field.group(2)) + 1
+                thread_idx = int(gpu_field.group(1)) + 1
 
-                metric_idx = columns.get_loc(gpu_field_map[gpu_field.group(1)])
+                metric_idx = columns.get_loc(gpu_field_map[gpu_field.group(2)])
 
             body_list.append(f'2:0:{"{:0.0f}".format(row[app_id_idx])}'
                              f':{"{:0.0f}".format(row[task_id_idx])}'
@@ -813,7 +814,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     # #### Loops configuration file
 
-    cols_regex = re.compile(r'((GPOWER|GFREQ|GMEMFREQ|GUTIL|GMEMUTIL)(\d))'
+    cols_regex = re.compile(r'(GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+                            r'UTIL_PERC|MEM_UTIL_PERC))'
                             r'|JOBID|STEPID|NODENAME|LOOPID|LOOP_NEST_LEVEL|'
                             r'LOOP_SIZE|TIMESTAMP|start_time|end_time|time|'
                             r'task_id|app_id|app_name')
@@ -959,6 +961,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         else:
             print('WARNING: Events configuration file '
                   f'{events_config_fn} does not exist.')
+    else:
+        print('There are not EAR events.')
 
     with open('.'.join([output_fn, 'pcf']), 'w') as pcf_file:
         pcf_file.write(paraver_conf_file_str)
