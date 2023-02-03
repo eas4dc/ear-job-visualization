@@ -91,6 +91,25 @@
         "avg_gpu_memutil" : {
             "column_name" : "avg_gpu_memutil",
             "range" : [0, 100]
+        },
+        "time_sec" : {
+            "column_name" : "TIME_SEC",
+            "display_name" : "Execution time (s)"
+        },
+        "job_step" : {
+            "display_name" : "Job-Step"
+        },
+        "node_count" : {
+            "column_name" : "NODENAME",
+            "display_name" : "# Nodes"
+        },
+        "energy" : {
+            "column_name" : "energy",
+            "display_name" : "Total energy (J)"
+        },
+        "cpu_gflops" : {
+            "column_name" : "CPU-GFLOPS",
+            "display_name" : "Accumulated GFlop/s"
         }
     },
     "events" : {
@@ -117,6 +136,22 @@
             "3": "APP_IO_BOUND",
             "4": "APP_BUSY_WAITING",
             "5": "APP_CPU_GPU"
+        }
+    },
+    "phases" : {
+        "comp" : {
+            "display_name" : "Computational",
+            "column_name" : "COMP_PHASE",
+            "sub-phases" : {
+                "cpu_bound" : {
+                    "display_name" : "CPU bound",
+                    "column_name" : "CPU_BOUND"
+                },
+                "mix" : {
+                    "display_name" : "Mix",
+                    "column_name" : "MIX_COMP"
+                }
+            }
         }
     }
 }

@@ -20,123 +20,132 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap, Normalize
 
 from common.io_api import read_data
-from common.metrics import get_metrics_conf
+from common.metrics import read_metrics_configuration, metric_regex
 from common.utils import filter_df, join_metric_node
 
-from pylatex import Tabular
-from pylatex.utils import bold
+from common.phases import (read_phases_configuration,
+                           df_phases_phase_time_ratio,
+                           df_phases_to_tex_tabular)
 
-from itertools import repeat
-
-
-def job_summary_df(df):
-    """
-    Given a DataFrame df representing raw EAR data in long format,
-    i.e., eacct -l, returns a DataFrame with a summary of relevant metrics
-    aggregated.
-
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-    grouped = (df
-               .assign(
-                   # Energy column
-                   energy=lambda x: x.DC_NODE_POWER_W * x.TIME_SEC,
-               )
-               # .transform(np.around, decimals=2)
-               .groupby(['JOBID', 'STEPID']))
-
-    grouped_n_nodes = grouped[['NODENAME']].count()
-
-    grouped_avg_metrics = grouped[['TIME_SEC',
-                                   'DC_NODE_POWER_W',
-                                   'MEM_GBS',
-                                   'CPI',
-                                   'IO_MBS',
-                                   'PERC_MPI']].mean()
-    grouped_gflops_w = (grouped
-                        .assign(
-                            lambda x: x['CPU-GFLOPS'] / x['DC_NODE_POWER_W']
-                         )).mean()
-
-    # Frequencies need to be passed to GHz
-    grouped_avg_metrics_2 = (grouped[['AVG_CPUFREQ_KHZ',
-                                      'AVG_IMCFREQ_KHZ',
-                                      'DEF_FREQ_KHZ']]
-                             .mean().div(pow(10, 6)))
-
-    grouped_agg_metrics = grouped[['energy']].sum()
-
-    return (pd
-            .concat([grouped_n_nodes, grouped_avg_metrics,
-                     grouped_avg_metrics_2, grouped_gflops_w,
-                     grouped_agg_metrics], axis=1)
-            .transform(np.around, decimals=2)
-            .reset_index()
-            .assign(job_step=lambda x: (f'{x.JOBID.values[0]}-'
-                                        '{x.STEPID.values[0]}'))
-            .drop(['JOBID', 'STEPID'], axis=1))[['job_step',
-                                                 'NODENAME',
-                                                 'TIME_SEC',
-                                                 'AVG_CPUFREQ_KHZ',
-                                                 'AVG_IMCFREQ_KHZ',
-                                                 'DC_NODE_POWER_W',
-                                                 'energy']].transpose()
+from common.job_summary import (job_cpu_summary_df, job_summary_to_tex_tabular,
+                                job_gpu_summary)
+from common.ear_data import df_has_gpu_data, df_get_valid_gpu_data
 
 
-def to_tex_tabular(df):
-    """
-    This function creates and returns a Tabular
-    with information provided by the DataFrame df.
-
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-
-    field_to_str = {
-            'job_step': 'Job-Step',
-            'NODENAME': '# Nodes',
-            'AVG_CPUFREQ_KHZ': 'CPU freq. (GHz)',
-            'AVG_IMCFREQ_KHZ': 'IMC freq. (GHz)',
-            'TIME_SEC': 'Time (s)',
-            'DC_NODE_POWER_W': 'Node Power (W)',
-            'energy': 'Energy (J)',
-            }
-
-    header_str = '|'.join(repeat('l', 2))
-    tabular = Tabular(header_str, pos='b')
-
-    df_index = df.index
-    df_values = list(df.index.map(lambda x: df.loc[x][0]))
-    for field, value in zip(df_index, df_values):
-        tabular.add_row(bold(field_to_str[field]), value)
-        tabular.add_hline()
-
-    tabular.generate_tex('job_summary')
-
-
-def job_summary(df):
+def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
     """
     Generate a job summary.
-    doc = Document(geometry_options={"margin": "2.54cm"})
-    with doc.create(Section('Job summary')):
-        doc.append(to_tex_tabular(df))
-
-    doc.generate_pdf('basic')
     """
+    job_id = df_long['JOBID'].unique()
+    if job_id.size != 1:
+        print('ERROR: Only one job is supported. Jobs detected: {job_id}.')
+        return
+    else:
+        job_id = str(job_id[0])
+
+    try:
+        print(f'Creating directory {job_id}')
+        os.mkdir(job_id)
+    except FileExistsError:
+        print(f'Directory {job_id} already exists.')
+        return
+
+    tables_dir = os.path.join(job_id, 'tables')
+
+    print(f'Creating {tables_dir} directory')
+    os.mkdir(tables_dir)
+
+    # Job summary
+    (job_cpu_summary_df(df_long, metrics_conf)
+     .pipe(job_summary_to_tex_tabular,
+           os.path.join(tables_dir, 'job_summary')))
+
+    # Job summary (GPU part)
+    (job_gpu_summary(df_long)
+     .pipe(job_summary_to_tex_tabular, os.path.join(tables_dir,
+                                                    'job_gpu_summary')))
+
+    timelines_dir = os.path.join(job_id, 'timelines')
+    os.mkdir(timelines_dir)
+
+    # Aggregated power
+    agg_metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
+                        os.path.join(timelines_dir, 'agg_dcpower'),
+                        fig_title='Aggregated DC Node Power (W)')
+
+    # Aggregated Mem. bandwidth
+    agg_metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
+                        os.path.join(timelines_dir, 'agg_gbs'),
+                        fig_title='Aggregated memory bandwidth (GB/s)')
+
+    # Aggregated GFlop/s
+    agg_metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
+                        os.path.join(timelines_dir, 'agg_gflops'),
+                        fig_title='Aggregated CPU GFlop/s')
+
+    # Aggregated I/O
+    agg_metric_timeline(df_loops, metric_regex('io_mbs', metrics_conf),
+                        os.path.join(timelines_dir, 'agg_iombs'),
+                        fig_title='Aggregated I/O throughput (MB/s)')
+
+    # GPU timelines
+    if df_has_gpu_data(df_loops):
+
+        # Aggregated GPU power
+        gpu_pwr_re = metric_regex('gpu_power', metrics_conf)
+
+        df_agg_gpupwr = (df_loops
+                         .assign(
+                             tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_re)
+                                                     .sum(axis=1)
+                                                    )
+                             )
+                         )
+        agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
+                            os.path.join(timelines_dir, 'agg_gpupower'),
+                            fig_title='Aggregated GPU Power (W)')
+
+        # Per-node GPU util
+        norm = Normalize(vmin=0, vmax=100, clip=True)
+        metric_timeline(filter_invalid_gpu_series(df_loops),
+                        metric_regex('gpu_util', metrics_conf),
+                        os.path.join(timelines_dir, 'per-node_gpuutil'),
+                        norm=norm, fig_title='GPU utilization (%)')
+
+    # Per-node CPI
+    metric_timeline(df_loops, metric_regex('cpi', metrics_conf),
+                    os.path.join(timelines_dir, 'per-node_cpi'),
+                    fig_title='Cycles per Instruction')
+
+    # Per-node GBS
+    metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
+                    os.path.join(timelines_dir, 'per-node_gbs'),
+                    fig_title='Memory bandwidth (GB/s)')
+
+    # Per-node GFlop/s
+    metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
+                    os.path.join(timelines_dir, 'per-node_gflops'),
+                    fig_title='CPU GFlop/s')
+
+    # Per-node Avg. CPU freq.
+    metric_timeline(df_loops, metric_regex('avg_cpufreq', metrics_conf),
+                    os.path.join(timelines_dir, 'per-node_avgcpufreq'),
+                    fig_title='Avg. CPU frequency (kHz)')
+
+    # Phases summary
+    (df_phases
+     .pivot(index='node_id', columns='Event_type', values='Value')
+     .pipe(df_phases_phase_time_ratio, phases_conf)
+     .pipe(df_phases_to_tex_tabular, 'job_phases_summary'))
 
 
-def metric_regex(metric, metrics_conf):
+def df_gpu_node_metrics(df, conf_fn='config.json'):
     """
-    This function returns the metric's column name
-    regex to be used then in a filtering action .
+    Given a DataFrame `df` with EAR data and a configuration filename `conf_fn`
+    Returns a copy of the DataFrame with new columns showing node-level GPU
+    metrics.
     """
-
-    return metrics_conf[metric]['column_name']
-
-
-def compute_agg_gpu_data(df):
-    metrics_conf = get_metrics_conf('config.json')
+    metrics_conf = read_metrics_configuration(conf_fn)
 
     gpu_pwr_regex = metric_regex('gpu_power', metrics_conf)
     gpu_freq_regex = metric_regex('gpu_freq', metrics_conf)
@@ -164,29 +173,6 @@ def compute_agg_gpu_data(df):
                 avg_gpu_memutil=lambda x: (x.filter(regex=gpu_memutil_regex)
                                            .mean(axis=1)),  # Avg %GPU mem util
                 ))
-
-
-def df_get_valid_gpu_data(df):
-    """
-    Returns a DataFrame with only valid GPU data.
-
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC)')
-    return (df
-            .filter(regex=gpu_metric_regex_str)
-            .mask(lambda x: x == 0)  # All 0s as nan
-            .dropna(axis=1, how='all')  # Drop nan columns
-            .mask(lambda x: x.isna(), other=0))  # Return to 0s
-
-
-def df_has_gpu_data(df):
-    """
-    Returns whether the DataFrame df has valid GPU data.
-    """
-    return not df.pipe(df_get_valid_gpu_data).empty
 
 
 def filter_invalid_gpu_series(df):
@@ -293,6 +279,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     # Normalize values
 
     if norm is None:  # Relative range
+        print('norm is none')
         norm = Normalize(vmin=np.nanmin(m_data_array),
                          vmax=np.nanmax(m_data_array), clip=True)
 
@@ -336,7 +323,8 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
 
         # Generate the timeline gradient
         axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                    norm=norm, aspect='auto')
+                    norm=norm, aspect='auto',
+                    vmin=norm.vmin, vmax=norm.vmax)
 
     if not vertical_legend:
         col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
@@ -352,96 +340,23 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     return fig
 
 
-def agg_gbs_timeline(df):
+def agg_metric_timeline(df, metric, fig_fn, fig_title=''):
     """
-    Build and save a timeline with the aggregated memory bandwidth.
+    Create and save a figure timeline from the DataFrame `df`, which contains
+    EAR loop data, for metric/s that match the regular expression `metric`.
+    The resulting figure shows the aggregated value of the metric along all
+    involved nodes in EAR loop data.
     """
-    title = 'Aggregated memory bandwidth (GB/s)'
 
-    fig = generate_metric_timeline_fig(df, 'gbs',
-                                       fig_title=title, granularity='app')
-    fig.savefig('agg_gbs')
-
-
-def agg_gflops_timeline(df):
-    """
-    Build and save a timeline with the aggregated GFlop/s.
-    """
-    title = 'Aggregated CPU GFlop/s'
-
-    fig = generate_metric_timeline_fig(df, 'gflops',
-                                       fig_title=title, granularity='app')
-    fig.savefig('agg_gflops')
+    fig = generate_metric_timeline_fig(df, metric,
+                                       fig_title=fig_title, granularity='app')
+    fig.savefig(fig_fn)
 
 
-def agg_dcpower_timeline(df):
-    title = 'Aggregated DC Node Power (W)'
-
-    fig = generate_metric_timeline_fig(df, 'dc_power',
-                                       fig_title=title, granularity='app')
-    fig.savefig('agg_dcpower')
-
-
-def agg_gpupower_timeline(df):
-    title = 'Aggregated GPU Power (W)'
-
-    gpu_pwr_re = r'GPU\d_POWER'
-
-    df_agg_gpupwr = (df.assign(tot_gpu_pwr=lambda x: x.filter(regex=gpu_pwr_re)
-                                                      .sum(axis=1)))
-
-    fig = generate_metric_timeline_fig(df_agg_gpupwr, 'tot_gpu_pwr',
-                                       fig_title=title, granularity='app')
-    fig.savefig('agg_gpupower')
-
-
-def cpi_timeline(df):
-    title = 'Cycles per Instruction'
-
-    fig = generate_metric_timeline_fig(df, 'cpi',
-                                       fig_title=title)
-    fig.savefig('runtime_cpi')
-
-
-def gbs_timeline(df):
-    title = 'Memory bandwidth (GB/s)'
-
-    fig = generate_metric_timeline_fig(df, 'gbs',
-                                       fig_title=title)
-    fig.savefig('runtime_gbs')
-
-
-def gflops_timeline(df):
-    title = 'CPU GFlop/s'
-
-    fig = generate_metric_timeline_fig(df, 'gflops',
-                                       fig_title=title)
-    fig.savefig('runtime_gflops')
-
-
-def avgcpufreq_timeline(df):
-    title = 'Avg. CPU frequency (kHz)'
-
-    fig = generate_metric_timeline_fig(df, 'avg_cpufreq',
-                                       fig_title=title)
-    fig.savefig('runtime_avgcpufreq')
-
-
-def gpuutil_timeline(df):
-    title = 'GPU utilization (%)'
-
-    norm = Normalize(vmin=0, vmax=100, clip=True)
-    fig = generate_metric_timeline_fig(filter_invalid_gpu_series(df),
-                                       'GPU_UTIL', norm=norm, fig_title=title)
-    fig.savefig('runtime_gpuutil')
-
-
-def agg_iombs_timeline(df):
-    title = 'Aggregated I/O throughput (MB/s)'
-
-    fig = generate_metric_timeline_fig(df, 'IO_MBS',
-                                       fig_title=title, granularity='app')
-    fig.savefig('agg_iombs')
+def metric_timeline(df, metric, fig_fn, fig_title='', **kwargs):
+    fig = generate_metric_timeline_fig(df, metric,
+                                       fig_title=fig_title, **kwargs)
+    fig.savefig(fig_fn)
 
 
 def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
@@ -455,10 +370,10 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
     and `avail_metrics` supported.
     """
 
-    df = (read_data(filename)
+    df = (read_data(filename, sep=';')
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
           .pipe(filter_invalid_gpu_series)
-          .pipe(compute_agg_gpu_data)
+          .pipe(df_gpu_node_metrics)
           )
 
     for metric in req_metrics:
@@ -471,6 +386,7 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
         norm = None
         if not rel_range:
             metric_range = metric_config['range']
+            print(f"Metric range: {metric_range}")
 
             norm = Normalize(vmin=metric_range[0],
                              vmax=metric_range[1], clip=True)
@@ -485,7 +401,8 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
                     fig_title = '-'.join([fig_title, str(step_id)])
 
         fig = generate_metric_timeline_fig(df, metric_name, norm=norm,
-                                           fig_title=fig_title)
+                                           fig_title=fig_title,
+                                           vertical_legend=not horizontal_legend)
 
         if save:
             name = f'runtime_{metric}'
@@ -499,7 +416,7 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
 
                     name = os.path.join(output, name)
                 else:
-                    name = output
+                    name = '-'.join([output, name])
 
             print(f'storing figure {name}')
 
@@ -514,7 +431,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     # Read the Job data
 
-    df_job = (read_data(job_data_fn)
+    df_job = (read_data(job_data_fn, sep=';')
               .pipe(filter_df, id=job_id, step_id=step_id)
               .pipe(lambda df: df[['id', 'step_id', 'app_id',
                                    'start_time', 'end_time']])
@@ -524,7 +441,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
               )
     # Read the Loop data
 
-    df_loops = (read_data(loop_data_fn)
+    df_loops = (read_data(loop_data_fn, sep=';')
                 .pipe(filter_df, JOBID=job_id, STEPID=step_id)
                 .merge(df_job)
                 .assign(
@@ -592,8 +509,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
     # a Paraver thread). It's needed to know how eacct command handles the
     # resulting header when there is a different number of GPUs for each
     # job-step requested.
-    # [UPDATE: Now, eacct has a column for all EAR supported GPUs even that GPUx
-    # has no data.]
+    # [UPDATE: Now, eacct has a column for all EAR supported GPUs even that
+    # GPUx has no data.]
     #
     # It is also assumed that both events and loops are from the same Job-step,
     # executed on the same node set..
@@ -976,6 +893,9 @@ def eacct(result_format, jobid, stepid, ear_events=False):
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-c", csv_file]
     elif result_format == "ear2prv":
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-o", "-c", csv_file]
+    elif result_format == 'job-summary':
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-l", "-c", csv_file]
+
     else:
         print("Unrecognized format: Please contact with support@eas4dc.com")
         sys.exit()
@@ -997,9 +917,16 @@ def eacct(result_format, jobid, stepid, ear_events=False):
         sys.exit()
 
     # Request EAR events
-    if ear_events:
+
+    if ear_events or result_format == 'job-summary':
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c',
                '.'.join(['events', csv_file])]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+
+    if result_format == 'job-summary':
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-c',
+               '.'.join(['loops', csv_file])]
         res = subprocess.run(cmd, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
 
@@ -1007,25 +934,27 @@ def eacct(result_format, jobid, stepid, ear_events=False):
     return csv_file
 
 
-# def parser_action_closure(conf_metrics):
-
 def parser_action(args):
 
     csv_generated = False
 
     if args.input_file is None:
+
         # Action performing eacct command and storing csv files
+
         input_file = eacct(args.format, args.job_id, args.step_id, args.events)
+
         args.input_file = input_file
+
         csv_generated = True
 
     if args.format == "runtime":
 
-        runtime(args.input_file, get_metrics_conf('config.json'), args.metrics,
-                args.relative_range, args.save, args.title, args.job_id,
-                args.step_id, args.output, args.horizontal_legend)
+        runtime(args.input_file, read_metrics_configuration('config.json'),
+                args.metrics, args.relative_range, args.save, args.title,
+                args.job_id, args.step_id, args.output, args.horizontal_legend)
 
-    if args.format == "ear2prv":
+    elif args.format == "ear2prv":
         head_path, tail_path = os.path.split(args.input_file)
         out_jobs_path = os.path.join(head_path,
                                      '.'.join(['out_jobs', tail_path]))
@@ -1042,17 +971,43 @@ def parser_action(args):
                 step_id=args.step_id, output_fn=args.output,
                 events_config_fn=args.events_config)
 
+    elif args.format == 'job-summary':
+        df_long = (read_data(args.input_file, sep=';')
+                   .pipe(filter_df,
+                         JOBID=args.job_id,
+                         STEPID=args.step_id))
+
+        head_path, tail_path = os.path.split(args.input_file)
+
+        df_loops_path = os.path.join(head_path,
+                                     '.'.join(['loops', tail_path])
+                                     )
+        df_loops = (read_data(df_loops_path, sep=';')
+                    .pipe(filter_df, JOBID=args.job_id, STEPID=args.step_id))
+
+        df_events_path = os.path.join(head_path,
+                                      '.'.join(['events', tail_path])
+                                      )
+        df_events = (read_data(df_events_path, sep=r'\s+')
+                     .pipe(filter_df,
+                           Job_id=args.job_id,
+                           Step_id=args.step_id))
+
+        metrics_conf = read_metrics_configuration('config.json')
+        phases_conf = read_phases_configuration('config.json')
+
+        job_summary(df_long, df_loops, df_events, metrics_conf, phases_conf)
+
     if csv_generated and not args.keep_csv:
         os.system(f'rm {input_file}')
         if args.format == 'ear2prv':
             os.system(f'rm {out_jobs_path}')
             if args.events:
                 os.system(f'rm {events_data_path}')
+        if args.format == 'job_summary':
+            os.system(f'rm {df_loops_path} && rm {df_events_path}')
 
-#    return parser_action
 
-
-# def build_parser(conf_metrics):
 def build_parser():
     """
     Given the used `conf_metrics`, returns a parser to
@@ -1103,7 +1058,11 @@ def build_parser():
                        help='Show the resulting figure (default).')
 
     runtime_group_args.add_argument('-t', '--title',
-                                    help='Set the resulting figure title.')
+                                    help="""Set the resulting figure title.
+                                    Only valid for `runtime` format option.
+                                    The resulting title will be
+                                    "<title>: <metric>" for each requested
+                                    metric.""")
 
     runtime_group_args.add_argument('-r', '--relative-range',
                                     action='store_true',
@@ -1118,7 +1077,7 @@ def build_parser():
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
 
-    config_metrics = get_metrics_conf('config.json')
+    config_metrics = read_metrics_configuration('config.json')
 
     metrics_help_str = ('Comma separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
@@ -1137,13 +1096,19 @@ def build_parser():
 
     events_config_help_str = ('Specify a (JSON formatted) file with event'
                               ' types categories. Default: events_config.json')
-    ear2prv_group_args.add_argument('--events-config', help=events_config_help_str)
+    ear2prv_group_args.add_argument('--events-config',
+                                    help=events_config_help_str)
 
     parser.add_argument('-o', '--output',
-                        help='Sets the output name. You can just set a path or'
-                             ' a filename. For `runtime` format option, this '
-                             'argument is only valid if `--save` flag is'
-                             ' given.')
+                        help="""Sets the output file name.
+                        If a path to an existing directory is given,
+                        `runtime` option saves files with the form
+                        `runtime_<metric>` (for each requested metric) will be
+                        saved on the given directory. Otherwise,
+                        <output>-runtime_<metric> is stored for each resulting
+                        figure.
+                        For ear2prv format, specify the base Paraver trace
+                        files name.""")
 
     parser.add_argument('-k', '--keep-csv', action='store_true',
                         help='Don\'t remove temporary csv files.')
@@ -1157,11 +1122,6 @@ def build_parser():
 def main():
     """ Entry method. """
 
-    # Read configuration file and init `metrics` data structure
-    # conf_metrics = init_metrics(read_ini('config.ini'))
-
-    # create the top-level parser
-    # parser = build_parser(conf_metrics)
     parser = build_parser()
 
     args = parser.parse_args()
