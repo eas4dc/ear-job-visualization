@@ -279,7 +279,6 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     # Normalize values
 
     if norm is None:  # Relative range
-        print('norm is none')
         norm = Normalize(vmin=np.nanmin(m_data_array),
                          vmax=np.nanmax(m_data_array), clip=True)
 
@@ -317,7 +316,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                 return ''
 
         axes.format(xticklabels=format_fn, ylocator=[0.5],
-                    yticklabels=[ylabel_text])
+                    yticklabels=[ylabel_text], ticklabelsize='small')
 
         data = np.array(m_data_array[i], ndmin=2)
 
@@ -327,12 +326,12 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                     vmin=norm.vmin, vmax=norm.vmax)
 
     if not vertical_legend:
-        col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False)
+        col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False, ticklabelsize='small')
         fig.colorbar(cm.ScalarMappable(
             cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
             cax=col_bar_ax, orientation="horizontal")
     else:
-        col_bar_ax = fig.add_subplot(grid_sp[:, 1])
+        col_bar_ax = fig.add_subplot(grid_sp[:, 1], ticklabelsize='small')
         fig.colorbar(cm.ScalarMappable(
             cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
             cax=col_bar_ax)
@@ -1079,7 +1078,7 @@ def build_parser():
 
     config_metrics = read_metrics_configuration('config.json')
 
-    metrics_help_str = ('Comma separated list of case sensitive'
+    metrics_help_str = ('Space separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
                         f'{", ".join(config_metrics)}'
                         )

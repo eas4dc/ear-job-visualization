@@ -25,6 +25,7 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 - Numpy >= 1.19
 - Matplotlib >= 3.3.4
 - Colorcet >= 2
+- Proplot
 
 ## Usage
 
@@ -51,15 +52,26 @@ If **runtime** format option is used, the *--input-file* option can be a single 
 If a directory name is given, the tool will read all files inside it (another reason why it is required to specify the Job and Step IDs).
 
 If you start working letting the tool to use *eacct* command internally, all required files are stored temporally while the tool is doing its work.
-If you to reuse later such files you can pass the option `--keep-csv` to prevent files been removed.
+If you want to reuse such files later you can pass the option `--keep-csv` to prevent files been removed.
 
 ### runtime
 
-Generate a heatmap-based graph for each metric specified by *--metrics* argument.
-Note that the accepted metrics by your **ear-analytics** installation must be specified in the [configuration](#configuration) file.
+Generate a heatmap-based graph for each metric specified by `--metrics` argument (i.e., space separated list of metric names).
+Note that the accepted metrics by your **ear-analytics** installation are specified in the configuration file.
 
-The resulting figure (for each *--metric* specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric each figure is showing.
+The resulting figure (for each metric specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric during application execution.
 All nodes visualised share the same timeline, which makes this command useful to check the application behaviour over all of them.
+If your requested metric is at GPU level, timelines will be produced for each GPU used on each node involved in the application execution.
+
+#### Examples
+
+```
+$> python ear_analytics.py --format runtime --input-file test_files/loops.gromacs_223676.csv -j 223676 -s 0 --save -l -r -m dc_power
+reading file test_files/loops.gromacs_223676.csv
+storing figure runtime_dc_power-223676-0
+```
+
+![alt text](extra/examples/imgs/runtime_dc_power-223676-0.pdf)
 
 ### Configuration
 
@@ -88,3 +100,4 @@ We get the following images:
 ## Contact
 
 For any question and suggestion, contact with support@eas4dc.com.
+You can also open an issue in this repository.
