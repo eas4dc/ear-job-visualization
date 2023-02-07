@@ -71,6 +71,13 @@ reading file test_files/loops.gromacs_223676.csv
 storing figure runtime_dc_power-223676-0
 ```
 
+<object data="extra/examples/imgs/runtime_dc_power-223676-0.pdf" type="application/pdf" width="700px" height="700px">
+    <embed src="extra/examples/imgs/runtime_dc_power-223676-0.pdf">
+        <p>This browser does not support PDFs. You can see it at `extra/examples/imgs/runtime_dc_power-223676-0.pdf`.</p>
+    </embed>
+</object>
+
+
 ![alt text](extra/examples/imgs/runtime_dc_power-223676-0.pdf)
 
 ### Configuration
