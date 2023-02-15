@@ -1,11 +1,11 @@
 """ High level support for read and visualize
     information given by EARL. """
 
-import argparse
-import os
 import sys
-import subprocess
-import time
+from argparse import HelpFormatter, ArgumentParser
+from os import mkdir, path, system
+from subprocess import run, PIPE, STDOUT, CalledProcessError
+from time import strftime, localtime
 import re
 import json
 
@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 import colorcet as cc
 import proplot as pplt
+from pylatex import Command
 
 from heapq import merge
 
@@ -28,7 +29,8 @@ from common.phases import (read_phases_configuration,
                            df_phases_to_tex_tabular)
 
 from common.job_summary import (job_cpu_summary_df, job_summary_to_tex_tabular,
-                                job_gpu_summary)
+                                job_gpu_summary,
+                                job_gpu_summary_to_tex_tabular)
 from common.ear_data import df_has_gpu_data, df_get_valid_gpu_data
 
 
@@ -44,48 +46,83 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
         job_id = str(job_id[0])
 
     try:
-        print(f'Creating directory {job_id}')
-        os.mkdir(job_id)
+        print(f'Creating directory for job {job_id}...')
+        mkdir(job_id)
     except FileExistsError:
         print(f'Directory {job_id} already exists.')
         return
 
-    tables_dir = os.path.join(job_id, 'tables')
+    try:
+        cmd = ' '.join(['cp', 'templates/main.tex.template', path.join(job_id, 'main.tex')])
+        run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
+    except CalledProcessError as err:
+        print('Error copying the template tex file:',
+              err.returncode, f'({err.output})')
 
-    print(f'Creating {tables_dir} directory')
-    os.mkdir(tables_dir)
+    # Build the resulting document title.
+    text_dir = path.join(job_id, 'text')
+
+    print(f'Creating {text_dir} directory...')
+    mkdir(text_dir)
+
+    job_name = df_long['JOBNAME'].unique()[0]
+    title = Command('title', f'{job_name} report')
+    title.generate_tex(path.join(text_dir, 'title'))
+
+    tables_dir = path.join(job_id, 'tables')
+
+    print(f'Creating {tables_dir} directory...')
+    mkdir(tables_dir)
 
     # Job summary
-    (job_cpu_summary_df(df_long, metrics_conf)
-     .pipe(job_summary_to_tex_tabular,
-           os.path.join(tables_dir, 'job_summary')))
+
+    job_sum_fn = path.join(tables_dir, 'job_summary')
+
+    (df_long
+     .pipe(job_cpu_summary_df, metrics_conf)
+     .pipe(job_summary_to_tex_tabular, job_sum_fn)
+     )
 
     # Job summary (GPU part)
-    (job_gpu_summary(df_long)
-     .pipe(job_summary_to_tex_tabular, os.path.join(tables_dir,
-                                                    'job_gpu_summary')))
 
-    timelines_dir = os.path.join(job_id, 'timelines')
-    os.mkdir(timelines_dir)
+    job_gpusum_fn = path.join(tables_dir, 'job_gpu_summary')
+
+    (df_long
+     .pipe(job_gpu_summary, metrics_conf)  # Build the DataFrame with summary.
+     .pipe(job_gpu_summary_to_tex_tabular, job_gpusum_fn)  # Create/save tabular.
+     )
+
+    # Phases summary
+
+    job_phasesum_fn = path.join(tables_dir, 'job_phases_summary')
+
+    (df_phases
+     .pivot(index='node_id', columns='Event_type', values='Value')
+     .pipe(df_phases_phase_time_ratio, phases_conf)
+     .pipe(df_phases_to_tex_tabular, job_phasesum_fn)
+     )
+
+    timelines_dir = path.join(job_id, 'timelines')
+    mkdir(timelines_dir)
 
     # Aggregated power
     agg_metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
-                        os.path.join(timelines_dir, 'agg_dcpower'),
+                        path.join(timelines_dir, 'agg_dcpower'),
                         fig_title='Aggregated DC Node Power (W)')
 
     # Aggregated Mem. bandwidth
     agg_metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
-                        os.path.join(timelines_dir, 'agg_gbs'),
+                        path.join(timelines_dir, 'agg_gbs'),
                         fig_title='Aggregated memory bandwidth (GB/s)')
 
     # Aggregated GFlop/s
     agg_metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
-                        os.path.join(timelines_dir, 'agg_gflops'),
+                        path.join(timelines_dir, 'agg_gflops'),
                         fig_title='Aggregated CPU GFlop/s')
 
     # Aggregated I/O
     agg_metric_timeline(df_loops, metric_regex('io_mbs', metrics_conf),
-                        os.path.join(timelines_dir, 'agg_iombs'),
+                        path.join(timelines_dir, 'agg_iombs'),
                         fig_title='Aggregated I/O throughput (MB/s)')
 
     # GPU timelines
@@ -102,41 +139,36 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                              )
                          )
         agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
-                            os.path.join(timelines_dir, 'agg_gpupower'),
+                            path.join(timelines_dir, 'agg_gpupower'),
                             fig_title='Aggregated GPU Power (W)')
 
         # Per-node GPU util
         norm = Normalize(vmin=0, vmax=100, clip=True)
         metric_timeline(filter_invalid_gpu_series(df_loops),
                         metric_regex('gpu_util', metrics_conf),
-                        os.path.join(timelines_dir, 'per-node_gpuutil'),
+                        path.join(timelines_dir, 'per-node_gpuutil'),
                         norm=norm, fig_title='GPU utilization (%)')
 
     # Per-node CPI
     metric_timeline(df_loops, metric_regex('cpi', metrics_conf),
-                    os.path.join(timelines_dir, 'per-node_cpi'),
+                    path.join(timelines_dir, 'per-node_cpi'),
                     fig_title='Cycles per Instruction')
 
     # Per-node GBS
     metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
-                    os.path.join(timelines_dir, 'per-node_gbs'),
+                    path.join(timelines_dir, 'per-node_gbs'),
                     fig_title='Memory bandwidth (GB/s)')
 
     # Per-node GFlop/s
     metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
-                    os.path.join(timelines_dir, 'per-node_gflops'),
+                    path.join(timelines_dir, 'per-node_gflops'),
                     fig_title='CPU GFlop/s')
 
     # Per-node Avg. CPU freq.
     metric_timeline(df_loops, metric_regex('avg_cpufreq', metrics_conf),
-                    os.path.join(timelines_dir, 'per-node_avgcpufreq'),
+                    path.join(timelines_dir, 'per-node_avgcpufreq'),
                     fig_title='Avg. CPU frequency (kHz)')
 
-    # Phases summary
-    (df_phases
-     .pivot(index='node_id', columns='Event_type', values='Value')
-     .pipe(df_phases_phase_time_ratio, phases_conf)
-     .pipe(df_phases_to_tex_tabular, 'job_phases_summary'))
 
 
 def df_gpu_node_metrics(df, conf_fn='config.json'):
@@ -369,59 +401,62 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
     and `avail_metrics` supported.
     """
 
-    df = (read_data(filename, sep=';')
-          .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-          .pipe(filter_invalid_gpu_series)
-          .pipe(df_gpu_node_metrics)
-          )
+    try:
+        df = (read_data(filename, sep=';')
+              .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
+              .pipe(filter_invalid_gpu_series)
+              .pipe(df_gpu_node_metrics)
+              )
+    except FileNotFoundError:
+        return
+    else:
+        for metric in req_metrics:
+            # Get a valid EAR column name
+            # metric_name = avail_metrics.get_metric(metric).name
+            metric_config = avail_metrics[metric]
+            metric_name = metric_config['column_name']
 
-    for metric in req_metrics:
-        # Get a valid EAR column name
-        # metric_name = avail_metrics.get_metric(metric).name
-        metric_config = avail_metrics[metric]
-        metric_name = metric_config['column_name']
+            # Set the configured normalization if requested.
+            norm = None
+            if not rel_range:
+                metric_range = metric_config['range']
+                print(f"Metric range: {metric_range}")
 
-        # Set the configured normalization if requested.
-        norm = None
-        if not rel_range:
-            metric_range = metric_config['range']
-            print(f"Metric range: {metric_range}")
+                norm = Normalize(vmin=metric_range[0],
+                                 vmax=metric_range[1], clip=True)
 
-            norm = Normalize(vmin=metric_range[0],
-                             vmax=metric_range[1], clip=True)
+            fig_title = metric
+            if title:  # We preserve the title got by the user
+                fig_title = f'{title}: {metric}'
+            else:  # The default title: %metric-%job_id-%step_id
+                if job_id:
+                    fig_title = '-'.join([fig_title, str(job_id)])
+                    if step_id is not None:
+                        fig_title = '-'.join([fig_title, str(step_id)])
 
-        fig_title = metric
-        if title:  # We preserve the title got by the user
-            fig_title = f'{title}: {metric}'
-        else:  # The default title: %metric-%job_id-%step_id
-            if job_id:
-                fig_title = '-'.join([fig_title, str(job_id)])
-                if step_id is not None:
-                    fig_title = '-'.join([fig_title, str(step_id)])
+            fig = generate_metric_timeline_fig(df, metric_name, norm=norm,
+                                               fig_title=fig_title,
+                                               vertical_legend=not horizontal_legend)
 
-        fig = generate_metric_timeline_fig(df, metric_name, norm=norm,
-                                           fig_title=fig_title,
-                                           vertical_legend=not horizontal_legend)
+            if save:
+                name = f'runtime_{metric}'
+                if job_id:
+                    name = '-'.join([name, str(job_id)])
+                    if step_id is not None:
+                        name = '-'.join([name, str(step_id)])
 
-        if save:
-            name = f'runtime_{metric}'
-            if job_id:
-                name = '-'.join([name, str(job_id)])
-                if step_id is not None:
-                    name = '-'.join([name, str(step_id)])
+                if output:
+                    if path.isdir(output):
 
-            if output:
-                if os.path.isdir(output):
+                        name = path.join(output, name)
+                    else:
+                        name = '-'.join([output, name])
 
-                    name = os.path.join(output, name)
-                else:
-                    name = '-'.join([output, name])
+                print(f'storing figure {name}')
 
-            print(f'storing figure {name}')
-
-            fig.savefig(name)
-        else:
-            fig.show()
+                fig.savefig(name)
+            else:
+                fig.show()
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
@@ -668,8 +703,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     # #### Generating the Paraver trace header
 
-    date_time = time.strftime('%d/%m/%y at %H:%M',
-                              time.localtime(np.min(df_job.start_time)))
+    date_time = strftime('%d/%m/%y at %H:%M',
+                         localtime(np.min(df_job.start_time)))
 
     file_trace_hdr = (f'#Paraver ({date_time}):{f_time}'
                       f':0:{n_appl}:{appl_list_str}')
@@ -812,7 +847,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
         if events_config_fn is None:
             events_config_fn = 'events_config.json'
 
-        if (os.path.isfile(events_config_fn)):
+        if (path.isfile(events_config_fn)):
             """
             # Hardcoded configuration - version 0:
             ear_event_types_values = {
@@ -900,7 +935,7 @@ def eacct(result_format, jobid, stepid, ear_events=False):
         sys.exit()
 
     # Run the command
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     # Check the possible errors
     if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
@@ -920,20 +955,21 @@ def eacct(result_format, jobid, stepid, ear_events=False):
     if ear_events or result_format == 'job-summary':
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c',
                '.'.join(['events', csv_file])]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     if result_format == 'job-summary':
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-c',
-               '.'.join(['loops', csv_file])]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
+        output_fn = '.'.join(['loops', csv_file])
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-c', output_fn]
+        res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     # Return generated file
     return csv_file
 
 
 def parser_action(args):
+    """
+    Parses the Namespace `args` and decides which action to do.
+    """
 
     csv_generated = False
 
@@ -954,13 +990,13 @@ def parser_action(args):
                 args.job_id, args.step_id, args.output, args.horizontal_legend)
 
     elif args.format == "ear2prv":
-        head_path, tail_path = os.path.split(args.input_file)
-        out_jobs_path = os.path.join(head_path,
-                                     '.'.join(['out_jobs', tail_path]))
+        head_path, tail_path = path.split(args.input_file)
+        out_jobs_path = path.join(head_path,
+                                  '.'.join(['out_jobs', tail_path]))
 
         events_data_path = None
         if args.events:
-            events_data_path = (os.path
+            events_data_path = (path
                                 .join(head_path,
                                       '.'.join(['events', tail_path])))
 
@@ -971,48 +1007,60 @@ def parser_action(args):
                 events_config_fn=args.events_config)
 
     elif args.format == 'job-summary':
-        df_long = (read_data(args.input_file, sep=';')
-                   .pipe(filter_df,
-                         JOBID=args.job_id,
-                         STEPID=args.step_id))
+        try:
+            df_long = (read_data(args.input_file, sep=';')
+                       .pipe(filter_df,
+                             JOBID=args.job_id,
+                             STEPID=args.step_id))
+        except FileNotFoundError:
+            return
+        else:
+            head_path, tail_path = path.split(args.input_file)
 
-        head_path, tail_path = os.path.split(args.input_file)
-
-        df_loops_path = os.path.join(head_path,
-                                     '.'.join(['loops', tail_path])
-                                     )
-        df_loops = (read_data(df_loops_path, sep=';')
-                    .pipe(filter_df, JOBID=args.job_id, STEPID=args.step_id))
-
-        df_events_path = os.path.join(head_path,
-                                      '.'.join(['events', tail_path])
+            df_loops_path = path.join(head_path,
+                                      '.'.join(['loops', tail_path])
                                       )
-        df_events = (read_data(df_events_path, sep=r'\s+')
-                     .pipe(filter_df,
-                           Job_id=args.job_id,
-                           Step_id=args.step_id))
+            try:
+                df_loops = (read_data(df_loops_path, sep=';')
+                            .pipe(filter_df,
+                                  JOBID=args.job_id,
+                                  STEPID=args.step_id
+                                  )
+                            )
+            except FileNotFoundError:
+                return
+            else:
+                df_events_path = path.join(head_path,
+                                           '.'.join(['events', tail_path])
+                                           )
+                try:
+                    df_events = (read_data(df_events_path, sep=r'\s+')
+                                 .pipe(filter_df,
+                                       Job_id=args.job_id,
+                                       Step_id=args.step_id))
+                except FileNotFoundError:
+                    return
+                else:
+                    metrics_conf = read_metrics_configuration('config.json')
+                    phases_conf = read_phases_configuration('config.json')
 
-        metrics_conf = read_metrics_configuration('config.json')
-        phases_conf = read_phases_configuration('config.json')
-
-        job_summary(df_long, df_loops, df_events, metrics_conf, phases_conf)
+                    job_summary(df_long, df_loops, df_events, metrics_conf, phases_conf)
 
     if csv_generated and not args.keep_csv:
-        os.system(f'rm {input_file}')
+        system(f'rm {input_file}')
         if args.format == 'ear2prv':
-            os.system(f'rm {out_jobs_path}')
+            system(f'rm {out_jobs_path}')
             if args.events:
-                os.system(f'rm {events_data_path}')
+                system(f'rm {events_data_path}')
         if args.format == 'job_summary':
-            os.system(f'rm {df_loops_path} && rm {df_events_path}')
+            system(f'rm {df_loops_path} && rm {df_events_path}')
 
 
 def build_parser():
     """
-    Given the used `conf_metrics`, returns a parser to
-    read and check command line arguments.
+    Returns the parser to read and check command line arguments.
     """
-    class CustomHelpFormatter(argparse.HelpFormatter):
+    class CustomHelpFormatter(HelpFormatter):
         def __init__(self, prog):
             super().__init__(prog, max_help_position=40, width=80)
 
@@ -1026,10 +1074,10 @@ def build_parser():
     def formatter(prog):
         return CustomHelpFormatter(prog)
 
-    parser = argparse.ArgumentParser(description='''High level support for read
-                                     and visualize EAR job data.''',
-                                     formatter_class=formatter,
-                                     epilog='Contact: support@eas4dc.com')
+    parser = ArgumentParser(description='''High level support for read
+                            and visualize EAR job data.''',
+                            formatter_class=formatter,
+                            epilog='Contact: support@eas4dc.com')
     parser.add_argument('--version', action='version', version='%(prog)s 4.2')
 
     parser.add_argument('--format', required=True,
@@ -1112,9 +1160,6 @@ def build_parser():
     parser.add_argument('-k', '--keep-csv', action='store_true',
                         help='Don\'t remove temporary csv files.')
 
-    # parser.set_defaults(func=parser_action_closure(conf_metrics))
-    parser.set_defaults(func=parser_action)
-
     return parser
 
 
@@ -1126,7 +1171,8 @@ def main():
     args = parser.parse_args()
 
     # condition if input file not given
-    args.func(args)
+    # args.func(args)
+    parser_action(args)
 
     # run query and plot generate phase plots
     return args

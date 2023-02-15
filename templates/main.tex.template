@@ -1,0 +1,159 @@
+\documentclass{article}
+\usepackage[scale=0.8]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{multirow}
+\usepackage[export]{adjustbox}
+
+\usepackage{hyperref}
+
+\input{text/title.tex}
+\author{ear-job-analytics\thanks{Data collected by \href{https://gitlab.bsc.es/ear_team/ear}{EAR software}.}}
+
+\begin{document}
+
+\maketitle
+
+\section{Job summary}
+
+% Anadir description de todo (tablas y figuras)
+% Anadir job name - As title - ok
+% Quitar el total (used) gpu power - ok
+% Anadir los otros datos de gpus, utilizacion, freq etc. - ok
+% Modificar el power en lugar de average el acumulado - ok
+% Añadir el total de los GFLOPS
+% IO que sea acumulated tambien
+% Add the average power (as in eacct)
+% Add average GPu power (per gpu)
+% Decidir si pones Aggregated o accumulated.
+% Poner "over the time" explicitamente al presentar las graficas
+
+Table~\ref{table:jobsummary} shows the main power and performance metrics of the job.
+CPU and Memory (IMC) frequencies are presented as the average (in GHz) of all involved nodes.
+The power is presented as the accumulated of the individual average dc power per node.
+This power includes GPU power if the job ran on nodes with such devices.
+GFLOP/s is the accumulated Giga Floating Point instructions per second.
+I/O field is the accumulated of the individual per-node IO/ activity measured as MB/second. 
+The percentage of MPI is the ratio of the total time spent in MPI calls vs Total CPU time. 
+EAR reports the average per node, where all the processes are included, and this row shows the average of all nodes.
+
+\begin{table}[hb]
+    \centering
+    \input{tables/job_summary.tex}
+    \caption{A global overview of job's collected metrics.}\label{table:jobsummary}
+\end{table}
+
+% WHAT HAPPENS IF THERE IS NO GPU INFO?
+Table~\ref{table:gpusummary} shows the per-job statistics related to the GPU activity.
+
+\begin{table}[hb]
+    \centering
+    \input{tables/job_gpu_summary.tex}
+    \caption{A global overview of job's collected GPU workload.}\label{table:gpusummary}
+\end{table}
+
+\section{Job classification}
+
+EAR classifies the job activity in different phases.
+Table~\ref{table:jobphases} shows the percentage of time the job has been in each phase and the percentage of time the job has been classified as CPU bound, Memory bound or in a intermediate (MIX) classification during computational phases.
+The percentage of CPU, Memory or MIX refers to the whole execution time.
+
+% Anadir el %% en la tabla
+
+\begin{table}[hb]
+    \centering
+    \input{tables/job_phases_summary.tex}
+    \caption{Job activity classification time.}\label{table:jobphases}
+\end{table}
+
+\section{Job timelines}
+
+% Escalar las graficas para que usen toda la columna
+% Anadir description JOB timelines
+
+The following graphs show pre-selected job metrics over the time.
+These graphs shows the variation over the time using gradients of colours where yellow means low values and (dark) blue means high values.
+Figure~\ref{fig:agg_dc_pwr} shows the total job dc power, figure~\ref{fig:agg_gbs} shows the total memory bandwidth (GB/sec), figure~\ref{fig:agg_gflops} shows the total GFlops/s and~\ref{fig:agg_iombs} shows the total I/O throughput (MB/sec).
+Each graph includes a legend with minimum and maximum values used to generate colours.
+
+% Figure \ref{fig:agg_dc_pwr} is the Accumulated DC node power (in Watts) over the time.
+
+\begin{figure}[htbp!]
+\includegraphics[width=0.8\textwidth, center]{timelines/agg_dcpower.pdf}
+\caption{Accumulated DC Power}\label{fig:agg_dc_pwr}
+\end{figure}
+
+% Figure \ref{fig:agg_gbs} is the Accumulated memory bandwith (in GB/sec) over the time.
+
+\begin{figure}[htbp]
+\includegraphics[width=0.8\textwidth, center]{timelines/agg_gbs.pdf}
+\caption{Accumulated memory bandwidth (GB/s)}
+\label{fig:agg_gbs}
+\end{figure}
+
+% Figure \ref{fig:agg_gflops} shows the Accumulated Floating Point operations per second (in Giga Flops/sec) over the time. 
+
+\begin{figure}[htbp]
+\includegraphics[width=0.8\textwidth, center]{timelines/agg_gflops.pdf}
+\caption{Accumulated CPU GFlop/s}
+\label{fig:agg_gflops}
+\end{figure}
+
+% Figure \ref{fig:agg_iombs} shows the Accumulated IO movements (total read and write Mega bytes per second) over the time. 
+
+\begin{figure}[htbp]
+\includegraphics[width=0.8\textwidth, center]{timelines/agg_iombs.pdf}
+\caption{Accumulated I/O throughput}
+\label{fig:agg_iombs}
+\end{figure}
+
+
+Figure~\ref{fig:agg_gpupwr} shows the Accumulated GPU power (in watts) over the time. 
+
+\begin{figure}[htbp]
+\includegraphics[width=0.8\textwidth, center]{timelines/agg_gpupower.pdf}
+\caption{Accumulated GPU power}\label{fig:agg_gpupwr}
+\end{figure}
+
+
+\section{Node metrics}
+
+% Anadir descripcion de per-node timelines
+% Anadir el power! 
+
+The following graphs show pre-selected per-node metrics over the time. These graphs shows the variation over the time using gradients of colours where yellow means low values and (dark) blue means high values. Figure \ref{fig:avgcpufreq} shows the CPU frequency, figure \ref{fig:cpi} shows the CPI (cycles per instructions), figure \ref{fig:gbs} shows the memory bandwith (GB/sec), figure \ref{fig:gflops} shows the total GFlops/s, PENDING. Each graph includes a legend with minimum and maximum values used to generate the colours. 
+
+\begin{figure}[ht]
+\includegraphics[width=0.8\textwidth, center]{timelines/per-node_avgcpufreq.pdf}
+\caption{Average CPU frequency}
+\label{fig:avgcpufreq}
+\end{figure}
+
+\begin{figure}[ht]
+\includegraphics[width=0.8\textwidth, center]{timelines/per-node_cpi.pdf}
+\caption{CPI}
+\label{fig:cpi}
+\end{figure}
+
+\begin{figure}[ht]
+\includegraphics[width=0.8\textwidth, center]{timelines/per-node_gbs.pdf}
+\caption{GB/s}
+\label{fig:gbs}
+\end{figure}
+
+\begin{figure}[ht]
+\includegraphics[width=0.8\textwidth, center]{timelines/per-node_gflops.pdf}
+\caption{GFlop/s}
+\label{fig:gflops}
+\end{figure}
+
+\begin{figure}[ht]
+\includegraphics[width=0.8\textwidth, center]{timelines/per-node_gpuutil.pdf}
+\caption{GPU utilization}
+\label{fig:gpuutil}
+\end{figure}
+
+
+
+\end{document}

@@ -106,7 +106,7 @@ def df_phases_to_tex_tabular(df, filepath, **kwargs):
 
     tabular.add_hline()
 
-    phase_row = ('', MultiColumn(df.shape[1], data=bold('Phase')))
+    phase_row = ('', MultiColumn(df.shape[1], align='c|', data=bold('Phase')))
     tabular.add_row(phase_row)
 
     node_row = (bold('Node'),) + tuple(df.columns.values)
