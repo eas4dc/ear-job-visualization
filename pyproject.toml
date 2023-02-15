@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ear-job-analytics"
+authors = [
+    {name = "Oriol Vidal", email = "oriol.vidal@eas4dc.com"},
+    {name = "Jalal Lakhlili", email = "jalal.lakhlili@eas4dc.com"}
+]
+description = "High level support for read and visualize job information given by the EAR Library."
+readme = "README.md"
+requires-python = ">= 3.7"
+keywords = ["data", "visualization", "hpc", "analysis", "ear", "library", "mpi", "gpu"]
+license = {text = "GPL version 3"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+version = "0.0.1"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "proplot",
+    "colorcet",
+    "pandas",
+    "pylatex",
+    "jinja2"
+]
