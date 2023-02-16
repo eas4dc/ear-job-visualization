@@ -19,10 +19,12 @@ classifiers = [
 version = "0.0.1"
 dependencies = [
     "numpy",
-    "matplotlib",
     "proplot",
     "colorcet",
     "pandas",
     "pylatex",
     "jinja2"
 ]
+
+[project.scripts]
+ear-job-analytics = "ear_analytics.ear_analytics:main"

@@ -11,14 +11,13 @@ import json
 
 import pandas as pd
 import numpy as np
-import colorcet as cc
-import proplot as pplt
 from pylatex import Command
 
 from heapq import merge
 
+from proplot import figure, GridSpec
 from matplotlib import cm
-from matplotlib.colors import ListedColormap, Normalize
+from matplotlib.colors import Normalize
 
 from common.io_api import read_data
 from common.metrics import read_metrics_configuration, metric_regex
@@ -38,6 +37,8 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
     """
     Generate a job summary.
     """
+    print('Building job summary...')
+
     job_id = df_long['JOBID'].unique()
     if job_id.size != 1:
         print('ERROR: Only one job is supported. Jobs detected: {job_id}.')
@@ -53,8 +54,14 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
         return
 
     try:
-        cmd = ' '.join(['cp', 'templates/main.tex.template', path.join(job_id, 'main.tex')])
+
+        print('Getting main file from template...')
+
+        main_file_path = path.join(job_id, 'main.tex')
+        cmd = ' '.join(['cp', 'templates/main.tex.template', main_file_path])
+
         run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
+
     except CalledProcessError as err:
         print('Error copying the template tex file:',
               err.returncode, f'({err.output})')
@@ -76,6 +83,8 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
     # Job summary
 
+    print('Building job summary table')
+
     job_sum_fn = path.join(tables_dir, 'job_summary')
 
     (df_long
@@ -89,10 +98,12 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
     (df_long
      .pipe(job_gpu_summary, metrics_conf)  # Build the DataFrame with summary.
-     .pipe(job_gpu_summary_to_tex_tabular, job_gpusum_fn)  # Create/save tabular.
+     .pipe(job_gpu_summary_to_tex_tabular, job_gpusum_fn)  # Create tabular.
      )
 
     # Phases summary
+
+    print('Building phases summary...')
 
     job_phasesum_fn = path.join(tables_dir, 'job_phases_summary')
 
@@ -105,25 +116,27 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
     timelines_dir = path.join(job_id, 'timelines')
     mkdir(timelines_dir)
 
+    print('Building job timelines...')
+
     # Aggregated power
     agg_metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
                         path.join(timelines_dir, 'agg_dcpower'),
-                        fig_title='Aggregated DC Node Power (W)')
+                        fig_title='Accumulated DC Node Power (W)')
 
     # Aggregated Mem. bandwidth
     agg_metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
                         path.join(timelines_dir, 'agg_gbs'),
-                        fig_title='Aggregated memory bandwidth (GB/s)')
+                        fig_title='Accumulated memory bandwidth (GB/s)')
 
     # Aggregated GFlop/s
     agg_metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
                         path.join(timelines_dir, 'agg_gflops'),
-                        fig_title='Aggregated CPU GFlop/s')
+                        fig_title='Accumulated CPU GFlop/s')
 
     # Aggregated I/O
     agg_metric_timeline(df_loops, metric_regex('io_mbs', metrics_conf),
                         path.join(timelines_dir, 'agg_iombs'),
-                        fig_title='Aggregated I/O throughput (MB/s)')
+                        fig_title='Accumulated I/O throughput (MB/s)')
 
     # GPU timelines
     if df_has_gpu_data(df_loops):
@@ -169,6 +182,10 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                     path.join(timelines_dir, 'per-node_avgcpufreq'),
                     fig_title='Avg. CPU frequency (kHz)')
 
+    # Per-node DC Power
+    metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
+                    path.join(timelines_dir, 'per-node_dcpower'),
+                    fig_title='DC node power (W)')
 
 
 def df_gpu_node_metrics(df, conf_fn='config.json'):
@@ -285,16 +302,17 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
 
     # Create the resulting figure for current metric
 
-    fig = pplt.figure(sharey=False, refaspect=20, suptitle=fig_title)
+    fig = figure(sharey=False, refaspect=20,
+                 suptitle=fig_title, suptitle_kw={'size': 'small'})
 
     if vertical_legend:
-        grid_sp = pplt.GridSpec(nrows=len(m_data_array), ncols=2,
-                                width_ratios=(0.95, 0.05), hspace=0)
+        grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
+                           width_ratios=(0.95, 0.05), hspace=0)
     else:
         def metric_row(i):
-            """
-            returns whether row i corresponds to a metric timeline.
-            """
+
+            # returns whether row i corresponds to a metric timeline.
+
             return i < len(m_data_array)
 
         height_ratios = [0.8 / len(m_data_array)
@@ -304,9 +322,11 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
         hspaces = [0 if metric_row(i + 1) else None
                    for i in range(len(m_data_array))]
 
-        grid_sp = pplt.GridSpec(nrows=len(m_data_array) + 1, ncols=1,
-                                hratios=height_ratios,
-                                hspace=hspaces)
+        grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1,
+                           hratios=height_ratios,
+                           hspace=hspaces)
+
+    # grid_sp = GridSpec(nrows=len(m_data_array), ncols=1, hspace=0)
 
     # Normalize values
 
@@ -348,25 +368,27 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                 return ''
 
         axes.format(xticklabels=format_fn, ylocator=[0.5],
-                    yticklabels=[ylabel_text], ticklabelsize='small')
+                    yticklabels=[ylabel_text], ticklabelsize='xx-small')
 
         data = np.array(m_data_array[i], ndmin=2)
 
         # Generate the timeline gradient
-        axes.imshow(data, cmap=ListedColormap(list(reversed(cc.bgy))),
-                    norm=norm, aspect='auto',
+        axes.imshow(data, cmap='imola_r',
+                    norm='linear', aspect='auto', discrete=False,
                     vmin=norm.vmin, vmax=norm.vmax)
 
     if not vertical_legend:
-        col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False, ticklabelsize='small')
+        col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False,
+                                     ticklabelsize='xx-small')
+
         fig.colorbar(cm.ScalarMappable(
-            cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-            cax=col_bar_ax, orientation="horizontal")
+            cmap='imola_r', norm=norm),
+            orientation="horizontal", loc='b', cax=col_bar_ax)
     else:
-        col_bar_ax = fig.add_subplot(grid_sp[:, 1], ticklabelsize='small')
+        col_bar_ax = fig.add_subplot(grid_sp[:, 1], ticklabelsize='xx-small')
         fig.colorbar(cm.ScalarMappable(
-            cmap=ListedColormap(list(reversed(cc.bgy))), norm=norm),
-            cax=col_bar_ax)
+            cmap='imola_r', norm=norm),
+            loc='r', cax=col_bar_ax)
 
     return fig
 
@@ -434,9 +456,11 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
                     if step_id is not None:
                         fig_title = '-'.join([fig_title, str(step_id)])
 
+            vertical_legend = not horizontal_legend
+
             fig = generate_metric_timeline_fig(df, metric_name, norm=norm,
                                                fig_title=fig_title,
-                                               vertical_legend=not horizontal_legend)
+                                               vertical_legend=vertical_legend)
 
             if save:
                 name = f'runtime_{metric}'
@@ -848,35 +872,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
             events_config_fn = 'events_config.json'
 
         if (path.isfile(events_config_fn)):
-            """
-            # Hardcoded configuration - version 0:
-            ear_event_types_values = {
-                    'earl_state': {
-                        0: 'NO_PERIOD',
-                        1: 'FIRST_ITERATION',
-                        2: 'EVALUATING_LOCAL_SIGNATURE',
-                        3: 'SIGNATURE_STABLE',
-                        4: 'PROJECTION_ERROR',
-                        5: 'RECOMPUTING_N',
-                        6: 'SIGNATURE_HAS_CHANGED',
-                        7: 'TEST_LOOP',
-                        8: 'EVALUATING_GLOBAL_SIGNATURE',
-                    },
-                    'policy_accuracy': {
-                        0: 'OPT_NOT_READY',
-                        1: 'OPT_OK',
-                        2: 'OPT_NOT_OK',
-                        3: 'OPT_TRY_AGAIN',
-                    },
-                    'earl_phase': {
-                        1: 'APP_COMP_BOUND',
-                        2: 'APP_MPI_BOUND',
-                        3: 'APP_IO_BOUND',
-                        4: 'APP_BUSY_WAITING',
-                        5: 'APP_CPU_GPU',
-                    },
-                }
-            """
             with open(events_config_fn, 'r', encoding='utf-8') as f:
                 try:
                     ear_event_types_values = json.load(f)
@@ -1044,7 +1039,8 @@ def parser_action(args):
                     metrics_conf = read_metrics_configuration('config.json')
                     phases_conf = read_phases_configuration('config.json')
 
-                    job_summary(df_long, df_loops, df_events, metrics_conf, phases_conf)
+                    job_summary(df_long, df_loops, df_events,
+                                metrics_conf, phases_conf)
 
     if csv_generated and not args.keep_csv:
         system(f'rm {input_file}')
@@ -1170,11 +1166,8 @@ def main():
 
     args = parser.parse_args()
 
-    # condition if input file not given
-    # args.func(args)
     parser_action(args)
 
-    # run query and plot generate phase plots
     return args
 
 
