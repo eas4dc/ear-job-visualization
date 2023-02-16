@@ -4,7 +4,7 @@ from re import findall
 from pylatex import Tabular, MultiRow, MultiColumn
 from pylatex.utils import bold
 
-from .metrics import metric_regex, read_metrics_configuration
+from .metrics import metric_regex
 from .ear_data import df_has_gpu_data, df_get_valid_gpu_data
 
 
@@ -24,8 +24,6 @@ def job_cpu_summary_df(df, metrics_conf):
                    energy=lambda x: (x[metric_regex('dc_power', metrics_conf)]\
                                      * x[metric_regex('time_sec',
                                          metrics_conf)]),
-                   # gflops_w=lambda x: (x['CPU-GFLOPS'] /
-                   #                     x['DC_NODE_POWER_W'])
                )
                .groupby(['JOBID', 'STEPID']))
 
@@ -97,11 +95,12 @@ def job_gpu_summary(df, metrics_conf):
 
     if df_has_gpu_data(df):
 
+        def compute_total_gpu_pwr(df):
+            return df.filter(regex=pwr_regex).sum(axis=1)
+
         df_gpu_data = (df_get_valid_gpu_data(df)
                        .assign(
-                           total_gpu_power=lambda x: (x
-                                                      .filter(regex=pwr_regex)
-                                                      .sum(axis=1))
+                           total_gpu_power=lambda x: compute_total_gpu_pwr(x)
                            ))
 
         df_gpus_used = df_gpu_data.filter(regex=metric_regex('gpu_util',

@@ -21,19 +21,21 @@ from matplotlib.colors import Normalize
 
 from common.io_api import read_data
 from common.metrics import read_metrics_configuration, metric_regex
-from common.utils import filter_df, join_metric_node
+from common.utils import filter_df
 
 from common.phases import (read_phases_configuration,
                            df_phases_phase_time_ratio,
                            df_phases_to_tex_tabular)
 
-from common.job_summary import (job_cpu_summary_df, job_summary_to_tex_tabular,
+from common.job_summary import (job_cpu_summary_df,
+                                job_summary_to_tex_tabular,
                                 job_gpu_summary,
                                 job_gpu_summary_to_tex_tabular)
-from common.ear_data import df_has_gpu_data, df_get_valid_gpu_data
+
+import common.ear_data as edata
 
 
-def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
+def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
     """
     Generate a job summary.
     """
@@ -139,7 +141,7 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                         fig_title='Accumulated I/O throughput (MB/s)')
 
     # GPU timelines
-    if df_has_gpu_data(df_loops):
+    if edata.df_has_gpu_data(df_loops):
 
         # Aggregated GPU power
         gpu_pwr_re = metric_regex('gpu_power', metrics_conf)
@@ -157,7 +159,7 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
         # Per-node GPU util
         norm = Normalize(vmin=0, vmax=100, clip=True)
-        metric_timeline(filter_invalid_gpu_series(df_loops),
+        metric_timeline(edata.filter_invalid_gpu_series(df_loops),
                         metric_regex('gpu_util', metrics_conf),
                         path.join(timelines_dir, 'per-node_gpuutil'),
                         norm=norm, fig_title='GPU utilization (%)')
@@ -188,92 +190,11 @@ def job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                     fig_title='DC node power (W)')
 
 
-def df_gpu_node_metrics(df, conf_fn='config.json'):
-    """
-    Given a DataFrame `df` with EAR data and a configuration filename `conf_fn`
-    Returns a copy of the DataFrame with new columns showing node-level GPU
-    metrics.
-    """
-    metrics_conf = read_metrics_configuration(conf_fn)
-
-    gpu_pwr_regex = metric_regex('gpu_power', metrics_conf)
-    gpu_freq_regex = metric_regex('gpu_freq', metrics_conf)
-    gpu_memfreq_regex = metric_regex('gpu_memfreq', metrics_conf)
-    gpu_util_regex = metric_regex('gpu_util', metrics_conf)
-    gpu_memutil_regex = metric_regex('gpu_memutil', metrics_conf)
-
-    return (df
-            .assign(
-                tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_regex)
-                                        .sum(axis=1)),  # Agg. GPU power
-
-                avg_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_regex)
-                                        .mean(axis=1)),  # Avg. GPU power
-
-                avg_gpu_freq=lambda x: (x.filter(regex=gpu_freq_regex)
-                                        .mean(axis=1)),  # Avg. GPU freq
-
-                avg_gpu_memfreq=lambda x: (x.filter(regex=gpu_memfreq_regex)
-                                           .mean(axis=1)),  # Avg. GPU mem freq
-
-                avg_gpu_util=lambda x: (x.filter(regex=gpu_util_regex)
-                                        .mean(axis=1)),  # Avg. % GPU util
-
-                avg_gpu_memutil=lambda x: (x.filter(regex=gpu_memutil_regex)
-                                           .mean(axis=1)),  # Avg %GPU mem util
-                ))
-
-
-def filter_invalid_gpu_series(df):
-    """
-    Given a DataFrame with EAR data, filters those GPU
-    columns that not contain some of the job's GPUs used.
-
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC)')
-
-    return (df
-            .drop(df  # Erase GPU columns
-                  .filter(regex=gpu_metric_regex_str).columns, axis=1)
-            .join(df  # Join with valid GPU columns
-                  .pipe(df_get_valid_gpu_data),
-                  validate='one_to_one'))  # Validate the join operation
-
-
-def metric_timeseries_by_node(df, metric):
-    """
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-    return (df
-            .pivot_table(values=metric,
-                         index='TIMESTAMP', columns='NODENAME')
-            .bfill()
-            .pipe(join_metric_node)
-            )
-
-
-def metric_agg_timeseries(df, metric):
-    """
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-    return(df
-           .pivot_table(values=metric,
-                        index='TIMESTAMP', columns='NODENAME')
-           .bfill()
-           .ffill()
-           .pipe(join_metric_node)
-           .agg(np.sum, axis=1)
-           )
-
-
 def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                                  vertical_legend=False, granularity='node'):
     """
+    Generates the timeline gradient.
+
     TODO: Pay attention here because this function depends directly
     on EAR's output.
     """
@@ -281,9 +202,9 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     metric_filter = df.filter(regex=metric).columns
 
     if granularity != 'app':
-        m_data = metric_timeseries_by_node(df, metric_filter)
+        m_data = edata.metric_timeseries_by_node(df, metric_filter)
     else:
-        m_data = metric_agg_timeseries(df, metric_filter)
+        m_data = edata.metric_agg_timeseries(df, metric_filter)
 
     m_data.index = pd.to_datetime(m_data.index, unit='s')
 
@@ -426,8 +347,8 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
     try:
         df = (read_data(filename, sep=';')
               .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-              .pipe(filter_invalid_gpu_series)
-              .pipe(df_gpu_node_metrics)
+              .pipe(edata.filter_invalid_gpu_series)
+              .pipe(edata.df_gpu_node_metrics)
               )
     except FileNotFoundError:
         return
@@ -484,8 +405,7 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
-            step_id=None, output_fn=None,
-            events_config_fn=None):
+            step_id=None, output_fn=None, events_config_fn=None):
 
     # Read the Job data
 
@@ -915,14 +835,32 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
 
 def eacct(result_format, jobid, stepid, ear_events=False):
-    # A temporary folder to store the generated csv file
-    csv_file = '.'.join(['_'.join(['tmp', f"{jobid}", f"{stepid}"]), 'csv'])
+    """
+    This function calls properly the `eacct` command in order
+    to get files to be worked by `result_format` feature.
 
-    if result_format == "runtime":
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-c", csv_file]
+    The filename where data is stored is "tmp_<jobid>_<stepid>.csv", which is
+    returned.
+
+    Basic command for each format:
+        runtime -> -r
+        ear2prv -> -r -o
+        summary -> -l
+
+    If the requested format is "summary" or `ear_events` is True, an
+    additional call is done requesting for events, i.e., `eacct -x`.
+
+    The resulting filename is "events.tmp_<jobid>_<stepid>.csv", but note that
+    the function still returning the basic command filename.
+    """
+
+    csv_file = f'tmp_{jobid}_{stepid}.csv'
+
+    if result_format == 'runtime':
+        cmd = ['eacct', '-j', f'{jobid}.{stepid}', '-r', '-c', csv_file]
     elif result_format == "ear2prv":
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-o", "-c", csv_file]
-    elif result_format == 'job-summary':
+    elif result_format == 'summary':
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-l", "-c", csv_file]
 
     else:
@@ -947,12 +885,12 @@ def eacct(result_format, jobid, stepid, ear_events=False):
 
     # Request EAR events
 
-    if ear_events or result_format == 'job-summary':
+    if ear_events or result_format == 'summary':
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c',
                '.'.join(['events', csv_file])]
         res = run(cmd, stdout=PIPE, stderr=PIPE)
 
-    if result_format == 'job-summary':
+    if result_format == 'summary':
         output_fn = '.'.join(['loops', csv_file])
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-c', output_fn]
         res = run(cmd, stdout=PIPE, stderr=PIPE)
@@ -1039,8 +977,8 @@ def parser_action(args):
                     metrics_conf = read_metrics_configuration('config.json')
                     phases_conf = read_phases_configuration('config.json')
 
-                    job_summary(df_long, df_loops, df_events,
-                                metrics_conf, phases_conf)
+                    build_job_summary(df_long, df_loops, df_events,
+                                      metrics_conf, phases_conf)
 
     if csv_generated and not args.keep_csv:
         system(f'rm {input_file}')
@@ -1048,7 +986,7 @@ def parser_action(args):
             system(f'rm {out_jobs_path}')
             if args.events:
                 system(f'rm {events_data_path}')
-        if args.format == 'job_summary':
+        if args.format == 'summary':
             system(f'rm {df_loops_path} && rm {df_events_path}')
 
 
@@ -1056,7 +994,13 @@ def build_parser():
     """
     Returns the parser to read and check command line arguments.
     """
+
     class CustomHelpFormatter(HelpFormatter):
+        """
+        This class was created in order to change the width of the
+        help message of the parser. It's a bit tricky to use this, as
+        HelpFormatter is not officialy documented.
+        """
         def __init__(self, prog):
             super().__init__(prog, max_help_position=40, width=80)
 
@@ -1077,10 +1021,10 @@ def build_parser():
     parser.add_argument('--version', action='version', version='%(prog)s 4.2')
 
     parser.add_argument('--format', required=True,
-                        choices=['runtime', 'ear2prv', 'job-summary'],
+                        choices=['runtime', 'ear2prv', 'summary'],
                         help='''Build results according to chosen format:
                         runtime (static images) or ear2prv (using paraver
-                        tool).''')
+                        tool) (ear2prv UNSTABLE).''')
 
     parser.add_argument('--input-file', help=('''Specifies the input file(s)
                                               name(s) to read data from.
