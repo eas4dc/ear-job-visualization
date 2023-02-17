@@ -1,1 +1,1 @@
-include src/ear_analytics/config/*
+include src/ear_analytics/config.json

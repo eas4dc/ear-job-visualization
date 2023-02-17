@@ -4,6 +4,8 @@ import configparser
 
 import pandas as pd
 
+from importlib.resources import files
+
 from itertools import dropwhile
 from json import load
 
@@ -71,5 +73,5 @@ def read_configuration(filename):
     Read configuration stored at `filename` in JSON format.
     Returns the loeaded dict directly.
     """
-    with open(filename) as fn:
+    with files('ear_analytics').joinpath(filename).open('r') as fn:
         return load(fn)

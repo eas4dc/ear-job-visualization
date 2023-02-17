@@ -116,7 +116,8 @@ def df_phases_to_tex_tabular(df, filepath, **kwargs):
     tabular.add_hline()
 
     for node, data in zip(df.index, df.to_numpy()):
-        tabular.add_row((node,) + tuple(data))
+        data_form_as_perc = map(lambda x: f'{x} %', data)  # We want %
+        tabular.add_row((node,) + tuple(data_form_as_perc))
 
     tabular.add_hline()
 

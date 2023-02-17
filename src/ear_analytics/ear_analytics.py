@@ -19,20 +19,21 @@ from proplot import figure, GridSpec
 from matplotlib import cm
 from matplotlib.colors import Normalize
 
-from common.io_api import read_data
-from common.metrics import read_metrics_configuration, metric_regex
-from common.utils import filter_df
 
-from common.phases import (read_phases_configuration,
-                           df_phases_phase_time_ratio,
-                           df_phases_to_tex_tabular)
+from .io_api import read_data
+from .metrics import read_metrics_configuration, metric_regex
+from .utils import filter_df
 
-from common.job_summary import (job_cpu_summary_df,
-                                job_summary_to_tex_tabular,
-                                job_gpu_summary,
-                                job_gpu_summary_to_tex_tabular)
+from . import ear_data as edata
 
-import common.ear_data as edata
+from .phases import (read_phases_configuration,
+                     df_phases_phase_time_ratio,
+                     df_phases_to_tex_tabular)
+
+from .job_summary import (job_cpu_summary_df,
+                          job_summary_to_tex_tabular,
+                          job_gpu_summary,
+                          job_gpu_summary_to_tex_tabular)
 
 
 def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
@@ -224,7 +225,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     # Create the resulting figure for current metric
 
     fig = figure(sharey=False, refaspect=20,
-                 suptitle=fig_title, suptitle_kw={'size': 'small'})
+                 suptitle=fig_title, suptitle_kw={'size': 'x-small'})
 
     if vertical_legend:
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
@@ -939,7 +940,7 @@ def parser_action(args):
                 step_id=args.step_id, output_fn=args.output,
                 events_config_fn=args.events_config)
 
-    elif args.format == 'job-summary':
+    elif args.format == 'summary':
         try:
             df_long = (read_data(args.input_file, sep=';')
                        .pipe(filter_df,
