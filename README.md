@@ -102,36 +102,31 @@ All nodes visualised share the same timeline, which makes this command useful to
 #### Examples
 
 ```
-$> python ear_analytics.py --format runtime --input-file test_files/loops.gromacs_223676.csv -j 223676 -s 0 --save -l -r -m dc_power
+$> ear-job-analytics --format runtime --input-file test_files/loops.gromacs_223676.csv -j 223676 -s 0 --save -l -r -m dc_power
 reading file test_files/loops.gromacs_223676.csv
 storing figure runtime_dc_power-223676-0
 ```
 
-You can check the resulting figure [here](extra/examples/imgs/runtime_dc_power-223676-0.pdf).
+You can check the resulting figure [here](src/extra/examples/imgs/runtime_dc_power-223676-0.pdf).
 
-### Configuration
+#### Request metrics
 
-**ear-analytics** works with a configuration file called *config.ini*. You can modify the template given in this repository.
-By now, this configuration file only lets you specify which metrics will be accepted by **ear-analytics** and for which range of values will work each one based on the architecture you are working (only useful if you run the command with `--absolute-range` argument).
-Note that all metrics you specify must be reported before by [eacct](https://gitlab.bsc.es/ear_team/ear/-/wikis/Commands#energy-account-eacct) command or by metrics plugin specified by SLURM\_EAR\_REPORT\_ADD environment variable,
-and each metric name must be the same as it is reported in the header of the generated files.
+The *--metrics* option allows you request one or more metrics to visualize.
+Type `ear-job-analytics --help` to see which of them are currently available.
+Metrics are specified by a configuration file (not documented yet), so it's easy to extend the supported ones.
+Contact with support@eas4dc.com to request more metrics.
 
-#### Example
+By default, the range to compute each metric runtime gradient is configured at *config.json*, but you can tell the tool to compute the gradient based on the range of the current data by typing `--relative-range` option before requestingthe metrics list:
 
-The next table shows content of `TODO` file, which content output information of all loops recorded by EAR during the execution of `TODO: application name` configured to be executed with `TODO` MPI processes accross `TODO` nodes. We will visualise the CPI, GFLOPS and the percentage of time spent in MPI calls reported by EAR for each node this application was executed.
+```
+$> ear-job-analytics --format runtime --input-file test_files/loops.gromacs_223676.csv --job-id 223676 --step-id 0 --relative-range -m dc_power cpi
+```
 
-![alt text](examples/pop_loops_table.png)
+#### Change the output
 
-To get the wanted results, we type:
-
-`$ python ear_analytics.py -t "BT 4N" -o "BT_4N" extra/examples/bt_test_loops runtime -m cpi gflops p.mpi`
-
-We get the following images:
-
-![alt text](extra/examples/bt_test_runtime/runtime_CPI.jpg)
-![alt text](extra/examples/bt_test_runtime/runtime_GFLOPS.jpg)
-![alt text](extra/examples/bt_test_runtime/runtime_P.MPI.jpg)
-
+By default, the legend of the gradient is displayed vertically at the right of timelines.
+If there are a few timelines, the height of the legend can be too short to correctly visualize the color range legend.
+You can set the `--horizontal-legend` option to display the legend horizontally below timelines, so you make sure the size is sufficient to read color codes.
 
 ## Contact
 
