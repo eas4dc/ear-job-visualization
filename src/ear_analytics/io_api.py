@@ -4,7 +4,8 @@ import configparser
 
 import pandas as pd
 
-from importlib.resources import files
+# from importlib.resources import files
+from importlib_resources import files
 
 from itertools import dropwhile
 from json import load

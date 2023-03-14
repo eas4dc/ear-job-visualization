@@ -20,12 +20,43 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 ## Requirements
 
-- Python >= 3.6
-- Pandas >= 1.5
-- Numpy >= 1.19
-- Matplotlib >= 3.3.4
-- Colorcet >= 2
+- Python < 3.9
+- Numpy
+- Matplotlib < 3.5
 - Proplot
+- Pandas
+
+By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.
+Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly.
+
+If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
+You can also provide directly input files if eacct is unable, [read below](providing-files-instead-of-using-internally-eacct). 
+
+## Installation
+
+This repository contains all recipes to build and install the package.
+You need **build** and **setuptools** packages properly build and install this one.
+
+```
+pip install -U pip
+pip install build setuptools
+python -m build
+pip install .
+```
+
+Then, you can type `ear-job-analytics` and you should see the following:
+
+```
+usage: ear-job-analytics [-h] [--version] --format {runtime,ear2prv,summary}
+                         [--input-file INPUT_FILE] -j JOB_ID -s STEP_ID
+                         [--save | --show] [-t TITLE] [-r] [-l]
+                         [-m metric [metric ...]] [-e]
+                         [--events-config EVENTS_CONFIG] [-o OUTPUT] [-k]
+ear-job-analytics: error: the following arguments are required: --format, -j/--job-id, -s/--step-id
+```
+
+If you had some trouble during the build and/or installation process, contact with oriol.vidal@eas4dc.com.
+We are trying provide a more easy way to install the package.
 
 ## Usage
 
@@ -35,33 +66,38 @@ Read below for a detailed description of each feature.
 
 In addition, you must specify the Job (i.e., `--job-id`) and Step (i.e., `--step-id`) IDs of the job being analyzed as features currently only support working with data corresponding with one Job-Step.
 These required options ensures the tool to filter the input data by Job and Step IDs, respectively, to avoid possible errors on the output.
+So, the minimum shape of an invokation is:
 
-The *runtime* option is the one used to generate static images (which you can modify at invokation time), while *ear2prv* refers the tool interface to output data following the Paraver Trace Format.
+```
+$> ear-job-analytics --format [runtime|ear2prv|summary] --job-id <JobID> --step-id <StepID>
+```
+
+The *runtime* option is the one used to generate static images (which you can modify at invokation time), while *ear2prv* refers the tool's interface to output data following the Paraver Trace Format.
 Finally, *job-summary* generates an overview analysis of the most relevant information of the job.
 
-By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.
-Be sure you have the the *eacct* command on your path, and also `EAR_ETC` environment variable is set properly.
-If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
+** _ear2prv_ format is not in production yet. **
+
+### Providing files instead of using internally eacct
 
 If you know which *eacct* invokations are required to visualise the data, you can use the option *--input-file* to specify where the tool will find the data to be filtered by the two required job-related options (e.g., *--job-id*, *--step-id*).
 This option is useful when you already have data for multiple jobs and/or steps together and you want to work on it in several ways because naturally it's more fast to work directly on a file than invoking a command to make a query to a Database, storing the output on a file, and then read such file.
 This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.
 
-The way how the value of this option is handled depends on which functionality (e.g., format) you are working on, and which kind of data you want to produce/visualise.
+The way how the value of this option is handled depends on which functionality (e.g., *format*) you are working on, and which kind of data you want to produce/visualise.
 If **runtime** format option is used, the *--input-file* option can be a single filename (which can be given with its relative path) wich contains EAR loop data.
 If a directory name is given, the tool will read all files inside it (another reason why it is required to specify the Job and Step IDs).
 
-If you start working letting the tool to use *eacct* command internally, all required files are stored temporally while the tool is doing its work.
+If you started working by using *eacct* command internally, all required files are stored temporally while the tool is doing its work.
 If you want to reuse such files later you can pass the option `--keep-csv` to prevent files been removed.
+Then, you can provide those files to get different output.
 
-### runtime
+### *runtime* format
 
 Generate a heatmap-based graph for each metric specified by `--metrics` argument (i.e., space separated list of metric names).
 Note that the accepted metrics by your **ear-analytics** installation are specified in the configuration file.
 
 The resulting figure (for each metric specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric during application execution.
 All nodes visualised share the same timeline, which makes this command useful to check the application behaviour over all of them.
-If your requested metric is at GPU level, timelines will be produced for each GPU used on each node involved in the application execution.
 
 #### Examples
 
