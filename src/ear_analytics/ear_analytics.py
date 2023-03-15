@@ -337,7 +337,7 @@ def metric_timeline(df, metric, fig_fn, fig_title='', **kwargs):
     fig.savefig(fig_fn)
 
 
-def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
+def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, save=False,
             title=None, job_id=None, step_id=None, output=None,
             horizontal_legend=False):
     """
@@ -352,9 +352,10 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
         df = (read_data(filename, sep=';')
               .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
               .pipe(edata.filter_invalid_gpu_series)
-              .pipe(edata.df_gpu_node_metrics)
+              .pipe(edata.df_gpu_node_metrics, config_fn)
               )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        print(e)
         return
     else:
         for metric in req_metrics:
@@ -389,17 +390,19 @@ def runtime(filename, avail_metrics, req_metrics, rel_range=False, save=False,
 
             if save:
                 name = f'runtime_{metric}'
+                """
                 if job_id:
                     name = '-'.join([name, str(job_id)])
                     if step_id is not None:
                         name = '-'.join([name, str(step_id)])
+                """
 
                 if output:
                     if path.isdir(output):
 
                         name = path.join(output, name)
                     else:
-                        name = '-'.join([output, name])
+                        name = '-'.join([name, output])
 
                 print(f'storing figure {name}')
 
@@ -910,6 +913,12 @@ def parser_action(args):
 
     csv_generated = False
 
+    config_file = 'config.json'
+    if args.config_file:
+        config_file = args.config_file
+
+    config_file_path = files('ear_analytics').joinpath(config_file)
+
     if args.input_file is None:
 
         # Action performing eacct command and storing csv files
@@ -922,8 +931,8 @@ def parser_action(args):
 
     if args.format == "runtime":
 
-        runtime(args.input_file, read_metrics_configuration('config.json'),
-                args.metrics, args.relative_range, args.save, args.title,
+        runtime(args.input_file, read_metrics_configuration(config_file_path),
+                args.metrics, config_file_path, args.relative_range, args.save, args.title,
                 args.job_id, args.step_id, args.output, args.horizontal_legend)
 
     elif args.format == "ear2prv":
@@ -978,8 +987,9 @@ def parser_action(args):
                 except FileNotFoundError:
                     return
                 else:
-                    metrics_conf = read_metrics_configuration('config.json')
-                    phases_conf = read_phases_configuration('config.json')
+                    config_file = files('ear_analytics').joinpath('config.json')
+                    metrics_conf = read_metrics_configuration(config_file)
+                    phases_conf = read_phases_configuration(config_file)
 
                     build_job_summary(df_long, df_loops, df_events,
                                       metrics_conf, phases_conf)
@@ -1068,7 +1078,8 @@ def build_parser():
                                     'This option is useful when your trace has'
                                     ' a low number of nodes.')
 
-    config_metrics = read_metrics_configuration('config.json')
+    config = files('ear_analytics').joinpath('config.json')
+    config_metrics = read_metrics_configuration(config)
 
     metrics_help_str = ('Space separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
@@ -1094,15 +1105,18 @@ def build_parser():
                         help="""Sets the output file name.
                         If a path to an existing directory is given,
                         `runtime` option saves files with the form
-                        `runtime_<metric>` (for each requested metric) will be
-                        saved on the given directory. Otherwise,
-                        <output>-runtime_<metric> is stored for each resulting
+                        `runtime_<metric>.pdf` (for each requested metric) will be
+                        on the given directory. Otherwise,
+                        runtime_<metric>-<output> is stored for each resulting
                         figure.
                         For ear2prv format, specify the base Paraver trace
-                        files name.""")
+                        files base name.""")
 
     parser.add_argument('-k', '--keep-csv', action='store_true',
                         help='Don\'t remove temporary csv files.')
+
+    parser.add_argument('-c', '--config-file',
+                        help='Specify a custom configuration file.')
 
     return parser
 

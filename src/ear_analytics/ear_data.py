@@ -52,7 +52,7 @@ def filter_invalid_gpu_series(df):
                   validate='one_to_one'))  # Validate the join operation
 
 
-def df_gpu_node_metrics(df, conf_fn='config.json'):
+def df_gpu_node_metrics(df, conf_fn):
     """
     Given a DataFrame `df` with EAR data and a configuration filename `conf_fn`
     Returns a copy of the DataFrame with new columns showing node-level GPU

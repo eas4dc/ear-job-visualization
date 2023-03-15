@@ -10,7 +10,7 @@
         },
         "avg_cpufreq" : {
             "column_name" : "AVG_CPUFREQ_KHZ",
-            "range" : [1.5e6, 2.6e6]
+            "range" : [2.0e6, 3.6e6]
         },
         "avg_imcfreq" : {
             "column_name" : "AVG_IMCFREQ_KHZ",
@@ -18,7 +18,7 @@
         },
         "def_freq" : {
             "column_name" : "DEF_FREQ_KHZ",
-            "range" : [1.5e6, 2.6e6]
+            "range" : [1.5e6, 3.6e6]
         },
         "tpi" : {
             "column_name" : "TPI",
@@ -30,7 +30,7 @@
         },
         "dc_power" : {
             "column_name" : "DC_NODE_POWER_W",
-            "range" : [300, 600]
+            "range" : [300, 800]
         },
         "dram_power" : {
             "column_name" : "DRAM_POWER_W",
@@ -46,7 +46,7 @@
         },
         "gpu_power" : {
             "column_name" : "GPU(\\d)_POWER_W",
-            "range" : [100, 600]
+            "range" : [50, 150]
         },
         "gpu_freq" : {
             "column_name" : "GPU(\\d)_FREQ_KHZ",
@@ -70,11 +70,11 @@
         },
         "avg_gpu_power" : {
             "column_name" : "avg_gpu_pwr",
-            "range" : [50, 400]
+            "range" : [50, 150]
         },
         "tot_gpu_power" : {
             "column_name" : "tot_gpu_pwr",
-            "range" : [200, 1600]
+            "range" : [100, 480]
         },
         "avg_gpu_freq" : {
             "column_name" : "avg_gpu_freq",
