@@ -19,6 +19,7 @@ from proplot import figure, GridSpec
 from matplotlib import cm
 from matplotlib.colors import Normalize
 
+from importlib_resources import files
 
 from .io_api import read_data
 from .metrics import read_metrics_configuration, metric_regex
@@ -61,7 +62,9 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
         print('Getting main file from template...')
 
         main_file_path = path.join(job_id, 'main.tex')
-        cmd = ' '.join(['cp', 'templates/main.tex.template', main_file_path])
+        main_file_template = files('ear_analytics').joinpath('templates/main.tex.template')
+
+        cmd = ' '.join(['cp', str(main_file_template), main_file_path])
 
         run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
 

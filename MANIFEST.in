@@ -1,1 +1,2 @@
 include src/ear_analytics/config.json
+include src/ear_analytics/templates/main.tex.template

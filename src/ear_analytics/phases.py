@@ -75,7 +75,7 @@ def df_phases_phase_time_ratio(df, phases_conf):
         phase is a tuple of "display_name" and df's column_name
         """
 
-        timeperc_vs_total = (df[phase[1]] / df['total_time']) * 100
+        timeperc_vs_total = (df.get(phase[1], default=0) / df['total_time']) * 100
 
         return (phase[0], timeperc_vs_total)
 
