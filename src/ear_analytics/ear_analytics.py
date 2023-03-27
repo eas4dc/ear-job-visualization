@@ -54,7 +54,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
         print(f'Creating directory for job {job_id}...')
         mkdir(job_id)
     except FileExistsError:
-        print(f'Directory {job_id} already exists.')
+        print(f'Error: Directory {job_id} already exists.')
         return
 
     try:
@@ -71,6 +71,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
     except CalledProcessError as err:
         print('Error copying the template tex file:',
               err.returncode, f'({err.output})')
+        return
 
     # Build the resulting document title.
     text_dir = path.join(job_id, 'text')
@@ -100,12 +101,39 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
     # Job summary (GPU part)
 
-    job_gpusum_fn = path.join(tables_dir, 'job_gpu_summary')
+    gpu_sum_file_path = path.join(text_dir, 'job_gpu_summary.tex')
 
-    (df_long
-     .pipe(job_gpu_summary, metrics_conf)  # Build the DataFrame with summary.
-     .pipe(job_gpu_summary_to_tex_tabular, job_gpusum_fn)  # Create tabular.
-     )
+    if (edata.df_has_gpu_data(df_long)):
+
+        try:
+
+            print('Getting job GPU summary file from template...')
+
+            gpu_sum_file_template = files('ear_analytics').joinpath('templates/text/job_gpu_summary.tex')
+
+            cmd = ' '.join(['cp', str(gpu_sum_file_template), gpu_sum_file_path])
+
+            run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
+
+        except CalledProcessError as err:
+            print('Error copying the template tex file:',
+                  err.returncode, f'({err.output})')
+            return
+
+        job_gpusum_fn = path.join(tables_dir, 'job_gpu_summary')
+
+        # Build the DataFrame with summary and create the tabular
+        (df_long
+         .pipe(job_gpu_summary, metrics_conf, job_gpusum_fn)
+         )
+    else:
+        # Create an empry file
+        try:
+            with open(gpu_sum_file_path, mode='w'):
+                pass
+        except OSError:
+            print('Error: Creating the dummy GPU summary table file.')
+            return
 
     # Phases summary
 
@@ -120,6 +148,8 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
      )
 
     timelines_dir = path.join(job_id, 'timelines')
+
+    print('Creating timelines dir...')
     mkdir(timelines_dir)
 
     print('Building job timelines...')
@@ -145,28 +175,73 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                         fig_title='Accumulated I/O throughput (MB/s)')
 
     # GPU timelines
+
+    gpu_aggpwr_file_path = path.join(text_dir, 'agg_gpupwr.tex')
+    gpu_util_file_path = path.join(text_dir, 'gpu_util.tex')
+
     if edata.df_has_gpu_data(df_loops):
-
         # Aggregated GPU power
-        gpu_pwr_re = metric_regex('gpu_power', metrics_conf)
+        try:
+            print('Getting job GPU agg power file from template...')
 
-        df_agg_gpupwr = (df_loops
-                         .assign(
-                             tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_re)
-                                                     .sum(axis=1)
-                                                    )
+            gpu_aggpwr_file_template = files('ear_analytics').joinpath('templates/text/agg_gpupwr.tex')
+
+            cmd = ' '.join(['cp', str(gpu_aggpwr_file_template), gpu_aggpwr_file_path])
+
+            run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
+
+        except CalledProcessError as err:
+            print('Error copying the template tex file:',
+                  err.returncode, f'({err.output})')
+            return
+        else:
+            gpu_pwr_re = metric_regex('gpu_power', metrics_conf)
+
+            df_agg_gpupwr = (df_loops
+                             .assign(
+                                 tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_re)
+                                                         .sum(axis=1)
+                                                        )
+                                 )
                              )
-                         )
-        agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
-                            path.join(timelines_dir, 'agg_gpupower'),
-                            fig_title='Aggregated GPU Power (W)')
-
+            agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
+                                path.join(timelines_dir, 'agg_gpupower'),
+                                fig_title='Aggregated GPU Power (W)')
         # Per-node GPU util
-        norm = Normalize(vmin=0, vmax=100, clip=True)
-        metric_timeline(edata.filter_invalid_gpu_series(df_loops),
-                        metric_regex('gpu_util', metrics_conf),
-                        path.join(timelines_dir, 'per-node_gpuutil'),
-                        norm=norm, fig_title='GPU utilization (%)')
+        try:
+            print('Getting job GPU util file from template...')
+
+            gpu_util_file_template = files('ear_analytics').joinpath('templates/text/gpu_util.tex')
+
+            cmd = ' '.join(['cp', str(gpu_util_file_template), gpu_sum_file_path])
+
+            run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
+
+        except CalledProcessError as err:
+            print('Error copying the template tex file:',
+                  err.returncode, f'({err.output})')
+            return
+        else:
+            norm = Normalize(vmin=0, vmax=100, clip=True)
+            metric_timeline(edata.filter_invalid_gpu_series(df_loops),
+                            metric_regex('gpu_util', metrics_conf),
+                            path.join(timelines_dir, 'per-node_gpuutil'),
+                            norm=norm, fig_title='GPU utilization (%)')
+    else:
+        # Create an empty file
+        try:
+            with open(gpu_aggpwr_file_path, mode='w'):
+                pass
+        except OSError:
+            print('Error: Creating the dummy GPU agg power file.')
+            return
+        # Create an empty file
+        try:
+            with open(gpu_util_file_path, mode='w'):
+                pass
+        except OSError:
+            print('Error: Creating the dummy GPU util file.')
+            return
 
     # Per-node CPI
     metric_timeline(df_loops, metric_regex('cpi', metrics_conf),
@@ -913,11 +988,10 @@ def parser_action(args):
 
     csv_generated = False
 
-    config_file = 'config.json'
     if args.config_file:
-        config_file = args.config_file
-
-    config_file_path = files('ear_analytics').joinpath(config_file)
+        config_file_path = args.config_file
+    else:
+        config_file_path = files('ear_analytics').joinpath('config.json')
 
     if args.input_file is None:
 

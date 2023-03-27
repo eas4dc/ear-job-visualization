@@ -89,7 +89,7 @@ def job_cpu_summary_df(df, metrics_conf):
             .rename(index=field_to_str))
 
 
-def job_gpu_summary(df, metrics_conf):
+def job_gpu_summary(df, metrics_conf, output_fn):
 
     pwr_regex = metric_regex('gpu_power', metrics_conf)
 
@@ -169,6 +169,7 @@ def job_gpu_summary(df, metrics_conf):
                 .rename(field_to_str, axis=0)
                 .transform(around, decimals=2)
                 .pipe(lambda series: DataFrame({0: series}))
+                .pipe(job_gpu_summary_to_tex_tabular, output_fn)
                 )
 
 

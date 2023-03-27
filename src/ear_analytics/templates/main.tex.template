@@ -17,18 +17,6 @@
 
 \section{Job summary}
 
-% Anadir description de todo (tablas y figuras)
-% Anadir job name - As title - ok
-% Quitar el total (used) gpu power - ok
-% Anadir los otros datos de gpus, utilizacion, freq etc. - ok
-% Modificar el power en lugar de average el acumulado - ok
-% Añadir el total de los GFLOPS
-% IO que sea acumulated tambien
-% Add the average power (as in eacct)
-% Add average GPu power (per gpu)
-% Decidir si pones Aggregated o accumulated.
-% Poner "over the time" explicitamente al presentar las graficas
-
 Table~\ref{table:jobsummary} shows the main power and performance metrics of the job.
 CPU and Memory (IMC) frequencies are presented as the average (in GHz) of all involved nodes.
 The power is presented as the accumulated of the individual average dc power per node.
@@ -44,13 +32,7 @@ EAR reports the average per node, where all the processes are included, and this
     \caption{A global overview of job's collected metrics.}\label{table:jobsummary}
 \end{table}
 
-Table~\ref{table:gpusummary} shows the per-job statistics related to the GPU activity.
-
-\begin{table}[hb]
-    \centering
-    \input{tables/job_gpu_summary.tex}
-    \caption{A global overview of job's collected GPU workload.}\label{table:gpusummary}
-\end{table}
+\input{text/job_gpu_summary.tex}
 
 \section{Job classification}
 
@@ -93,24 +75,20 @@ Each graph includes a legend with minimum and maximum values used to generate co
 \caption{Accumulated I/O throughput (MB/s) across involved nodes over the time.}\label{fig:agg_iombs}
 \end{figure}
 
-
-Figure~\ref{fig:agg_gpupwr} shows the accumulated GPU power (in watts) over the time. 
-
-\begin{figure}[htbp]
-\includegraphics[width=0.8\textwidth, center]{timelines/agg_gpupower.pdf}
-\caption{Accumulated GPU power (W) across involved nodes over the time.}\label{fig:agg_gpupwr}
-\end{figure}
-
+\input{text/agg_gpupwr.tex}
 
 \section{Node metrics}
-
-% Anadir el power! 
 
 The following graphs show pre-selected per-node metrics over the time.
 These graphs shows the variation over the time using gradients of colours where yellow means low values and (dark) blue means high values.
 
-Figure~\ref{fig:avgcpufreq} shows the CPU frequency, figure~\ref{fig:cpi} shows the CPI (cycles per instructions), figure~\ref{fig:gbs} shows the memory bandwith (GB/sec), figure~\ref{fig:gflops} shows the total GFlops/s, PENDING\@.
+Figure~\ref{fig:dcpower} shows the power, figure~\ref{fig:avgcpufreq} shows the CPU frequency, figure~\ref{fig:cpi} shows the CPI (cycles per instructions), figure~\ref{fig:gbs} shows the memory bandwith (GB/sec), and figure~\ref{fig:gflops} shows the total GFlops/s.
 Each graph includes a legend with minimum and maximum values used to generate the colours.
+
+\begin{figure}[ht]
+\includegraphics[width=0.8\textwidth, center]{timelines/per-node_dcpower.pdf}
+\caption{DC power (W) over the time.}\label{fig:dcpower}
+\end{figure}
 
 \begin{figure}[ht]
 \includegraphics[width=0.8\textwidth, center]{timelines/per-node_avgcpufreq.pdf}
@@ -132,8 +110,6 @@ Each graph includes a legend with minimum and maximum values used to generate th
 \caption{GFlop/s over the time.}\label{fig:gflops}
 \end{figure}
 
-\begin{figure}[ht]
-\includegraphics[width=0.8\textwidth, center]{timelines/per-node_gpuutil.pdf}
-\caption{GPU utilization (in percentage) over the time.}\label{fig:gpuutil}
-\end{figure}
+\input{text/gpu_util.tex}
+
 \end{document}

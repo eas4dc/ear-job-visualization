@@ -1,2 +1,5 @@
 include src/ear_analytics/config.json
 include src/ear_analytics/templates/main.tex.template
+include src/ear_analytics/templates/text/agg_gpupwr.tex
+include src/ear_analytics/templates/text/gpu_util.tex
+include src/ear_analytics/templates/text/job_gpu_summary.tex

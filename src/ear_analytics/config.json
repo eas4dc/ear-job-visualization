@@ -150,6 +150,10 @@
                 "mix" : {
                     "display_name" : "Mix",
                     "column_name" : "MIX_COMP"
+                },
+                "mem_bound" : {
+                    "display_name" : "Memory bound",
+                    "column_name" : "MEM_BOUND"
                 }
             }
         }
