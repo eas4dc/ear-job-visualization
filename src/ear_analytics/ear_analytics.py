@@ -36,6 +36,8 @@ from .job_summary import (job_cpu_summary_df,
                           job_gpu_summary,
                           job_gpu_summary_to_tex_tabular)
 
+from .events import read_events_configuration
+
 
 def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
     """
@@ -486,7 +488,7 @@ def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, sa
                 fig.show()
 
 
-def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
+def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_id=None,
             step_id=None, output_fn=None, events_config_fn=None):
 
     # Read the Job data
@@ -699,7 +701,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
             # THREAD NAMES
             for gpu_idx in range(n_threads):
                 (thread_lvl_names
-                 .append(f'({node_name}) GPU {gpu_idx} @ {node_name}'))
+                 .append(f'GPU {gpu_idx} @ {node_name}'))
 
         # APPL level names
         appl_lvl_names = '\n'.join([appl_lvl_names,
@@ -868,47 +870,31 @@ def ear2prv(job_data_fn, loop_data_fn, events_data_fn=None, job_id=None,
 
     # Adding the categorical labels for EAR events.
     if df_events is not None:
+        ear_event_types_values = events_config
 
-        # Set the default config filename if the user didn't give one
-        if events_config_fn is None:
-            events_config_fn = 'events_config.json'
+        for ear_event_type in ear_event_types_values:
+            idx = paraver_conf_file_str.find(ear_event_type)
+            if idx != -1:
+                values_str = ('\n'
+                              .join([f'{key}\t{value}'
+                                     for key, value
+                                     in (ear_event_types_values[ear_event_type]
+                                         .items()
+                                         )
+                                     ]
+                                    )
+                              )
 
-        if (path.isfile(events_config_fn)):
-            with open(events_config_fn, 'r', encoding='utf-8') as f:
-                try:
-                    ear_event_types_values = json.load(f)
+                st_p = idx + len(ear_event_type)
 
-                    for ear_event_type in ear_event_types_values:
-                        idx = paraver_conf_file_str.find(ear_event_type)
-                        if idx != -1:
-                            values_str = ('\n'
-                                          .join([f'{key}\t{value}'
-                                                 for key, value
-                                                 in (ear_event_types_values[ear_event_type]
-                                                     .items()
-                                                     )
-                                                 ]
-                                                )
-                                          )
-
-                            st_p = idx + len(ear_event_type)
-
-                            paraver_conf_file_str = ('\n'
-                                                     .join([paraver_conf_file_str[:st_p],
-                                                            'VALUES',
-                                                            values_str,
-                                                            paraver_conf_file_str[st_p+1:]
-                                                            ]
-                                                           )
-                                                     )
-                except json.JSONDecodeError as json_err:
-                    print(f'ERROR: Decoding {json_err.doc}\n'
-                          f'Message: "{json_err.msg}" at line '
-                          f'{json_err.lineno} column {json_err.colno}.')
-
-        else:
-            print('WARNING: Events configuration file '
-                  f'{events_config_fn} does not exist.')
+                paraver_conf_file_str = ('\n'
+                                         .join([paraver_conf_file_str[:st_p],
+                                                'VALUES',
+                                                values_str,
+                                                paraver_conf_file_str[st_p+1:]
+                                                ]
+                                               )
+                                         )
     else:
         print('There are not EAR events.')
 
@@ -1021,10 +1007,9 @@ def parser_action(args):
                                       '.'.join(['events', tail_path])))
 
         # Call ear2prv format method
-        ear2prv(out_jobs_path, args.input_file,
+        ear2prv(out_jobs_path, args.input_file, read_events_configuration(config_file_path),
                 events_data_fn=events_data_path, job_id=args.job_id,
-                step_id=args.step_id, output_fn=args.output,
-                events_config_fn=args.events_config)
+                step_id=args.step_id, output_fn=args.output)
 
     elif args.format == 'summary':
         try:
@@ -1170,10 +1155,12 @@ def build_parser():
     ear2prv_group_args.add_argument('-e', '--events', action='store_true',
                                     help=events_help_str)
 
+    """
     events_config_help_str = ('Specify a (JSON formatted) file with event'
                               ' types categories. Default: events_config.json')
     ear2prv_group_args.add_argument('--events-config',
                                     help=events_config_help_str)
+    """
 
     parser.add_argument('-o', '--output',
                         help="""Sets the output file name.
