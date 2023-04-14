@@ -744,7 +744,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
     metrics = (df_loops.drop(columns=['JOBID', 'STEPID', 'NODENAME',
                                       'time', 'task_id', 'app_id', 'app_name',
                                       'gpu_power', 'gpu_freq', 'gpu_mem_freq',
-                                      'gpu_util', 'gpu_mem_util']
+                                      'gpu_util', 'gpu_mem_util', 'DATE']
                              ).columns
                )
 
