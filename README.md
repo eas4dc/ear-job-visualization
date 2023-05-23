@@ -30,7 +30,7 @@ By default, the tool calls internally the EAR account command (i.e., *eacct*) wi
 Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly.
 
 If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
-You can also provide directly input files if eacct is unable, [read below](providing-files-instead-of-using-internally-eacct). 
+You can also provide directly input files if eacct is unable, [read below](https://github.com/eas4dc/ear-job-analytics/blob/main/README.md#providing-files-instead-of-using-internally-eacct). 
 
 ## Installation
 
