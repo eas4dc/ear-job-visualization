@@ -35,7 +35,7 @@ You can also provide directly input files if eacct is unable, [read below](https
 ## Installation
 
 This repository contains all recipes to build and install the package.
-You need **build** and **setuptools** packages properly build and install this one.
+You need **build** and **setuptools** packages to properly build and install this one.
 
 ```
 pip install -U pip
