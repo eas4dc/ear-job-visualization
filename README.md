@@ -62,7 +62,7 @@ We are trying provide a more easy way to install the package.
 
 It is mandatory to specify the output format (i.e., `--format`) you want produce.
 Choices for this option are either *runtime*, *ear2prv* or *job-summary*, and each one enables each of the tool's features.
-Read below for a detailed description of each feature.
+Read below for a detailed description of each one.
 
 In addition, you must specify the Job (i.e., `--job-id`) and Step (i.e., `--step-id`) IDs of the job being analyzed as features currently only support working with data corresponding with one Job-Step.
 These required options ensures the tool to filter the input data by Job and Step IDs, respectively, to avoid possible errors on the output.
