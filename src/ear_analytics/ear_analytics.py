@@ -47,7 +47,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
     job_id = df_long['JOBID'].unique()
     if job_id.size != 1:
-        print('ERROR: Only one job is supported. Jobs detected: {job_id}.')
+        print(f'ERROR: Only one job is supported. Jobs detected: {job_id}.')
         return
     else:
         job_id = str(job_id[0])
@@ -215,7 +215,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
             gpu_util_file_template = files('ear_analytics').joinpath('templates/text/gpu_util.tex')
 
-            cmd = ' '.join(['cp', str(gpu_util_file_template), gpu_sum_file_path])
+            cmd = ' '.join(['cp', str(gpu_util_file_template), gpu_util_file_path])
 
             run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
 
@@ -281,6 +281,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     """
 
     metric_filter = df.filter(regex=metric).columns
+    print(metric_filter)
 
     if granularity != 'app':
         m_data = edata.metric_timeseries_by_node(df, metric_filter)
@@ -293,6 +294,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                             freq='1S').union(m_data.index)
 
     m_data = m_data.reindex(new_idx).bfill()
+    print(m_data)
 
     m_data_array = m_data.values.transpose()
     if granularity == 'app':
@@ -335,6 +337,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
     if norm is None:  # Relative range
         norm = Normalize(vmin=np.nanmin(m_data_array),
                          vmax=np.nanmax(m_data_array), clip=True)
+        print(norm)
 
     gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
                             r'UTIL_PERC|MEM_UTIL_PERC)')
@@ -1017,6 +1020,7 @@ def parser_action(args):
                        .pipe(filter_df,
                              JOBID=args.job_id,
                              STEPID=args.step_id))
+            print(df_long)
         except FileNotFoundError:
             return
         else:
