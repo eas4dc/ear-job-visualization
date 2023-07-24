@@ -1050,9 +1050,9 @@ def parser_action(args):
                 except FileNotFoundError:
                     return
                 else:
-                    config_file = files('ear_analytics').joinpath('config.json')
-                    metrics_conf = read_metrics_configuration(config_file)
-                    phases_conf = read_phases_configuration(config_file)
+                    # config_file = files('ear_analytics').joinpath('config.json')
+                    metrics_conf = read_metrics_configuration(config_file_path)
+                    phases_conf = read_phases_configuration(config_file_path)
 
                     build_job_summary(df_long, df_loops, df_events,
                                       metrics_conf, phases_conf)
