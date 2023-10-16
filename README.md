@@ -20,7 +20,7 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 ## Requirements
 
-- Python < 3.9
+- Python 3.8
 - Numpy
 - Matplotlib < 3.5
 - Proplot
