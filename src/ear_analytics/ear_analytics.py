@@ -486,7 +486,7 @@ def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, sa
 
                 print(f'storing figure {name}')
 
-                fig.savefig(name)
+                fig.savefig(name, format="png")
             else:
                 fig.show()
 
