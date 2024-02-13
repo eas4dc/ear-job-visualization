@@ -16,3 +16,10 @@ def metric_regex(metric, metrics_conf):
     """
 
     return metrics_conf[metric]['column_name']
+
+
+def get_plottable_metrics(metrics_conf):
+    """
+    Filters just those metrics that can be plotted.
+    """
+    return {k : v for (k, v) in metrics_conf.items() if k not in ['job_step', 'node_count', 'energy', 'cpu_flops']}

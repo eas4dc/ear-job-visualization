@@ -1,7 +1,7 @@
 """ High level support for read and visualize
     information given by EARL. """
 
-import sys
+from sys import exit
 from argparse import HelpFormatter, ArgumentParser
 from os import mkdir, path, system
 from subprocess import run, PIPE, STDOUT, CalledProcessError
@@ -22,7 +22,7 @@ from matplotlib.colors import Normalize
 from importlib_resources import files
 
 from .io_api import read_data
-from .metrics import read_metrics_configuration, metric_regex
+from .metrics import *
 from .utils import filter_df
 
 from . import ear_data as edata
@@ -306,7 +306,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
 
     # Create the resulting figure for current metric
 
-    fig = figure(sharey=False, refaspect=20,
+    fig = figure(sharey=False, refwidth='159.2mm', refaspect=6,
                  suptitle=fig_title, suptitle_kw={'size': 'x-small'})
 
     if vertical_legend:
@@ -486,7 +486,7 @@ def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, sa
 
                 print(f'storing figure {name}')
 
-                fig.savefig(name, format="png")
+                fig.savefig(name, dpi='figure')
             else:
                 fig.show()
 
@@ -1101,7 +1101,8 @@ def build_parser():
                         choices=['runtime', 'ear2prv', 'summary'],
                         help='''Build results according to chosen format:
                         runtime (static images) or ear2prv (using paraver
-                        tool) (ear2prv UNSTABLE).''')
+                        tool) (ear2prv UNSTABLE). summary option builds
+                        a small report about the job metrics.''')
 
     parser.add_argument('--input-file', help=('''Specifies the input file(s)
                                               name(s) to read data from.
@@ -1142,7 +1143,7 @@ def build_parser():
                                     ' a low number of nodes.')
 
     config = files('ear_analytics').joinpath('config.json')
-    config_metrics = read_metrics_configuration(config)
+    config_metrics = get_plottable_metrics(read_metrics_configuration(config))
 
     metrics_help_str = ('Space separated list of case sensitive'
                         ' metrics names to visualize. Allowed values are '
