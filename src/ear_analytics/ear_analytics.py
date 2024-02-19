@@ -271,7 +271,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                     fig_title='DC node power (W)')
 
 
-def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
+def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_title='',
                                  vertical_legend=False, granularity='node'):
     """
     Generates the timeline gradient.
@@ -289,9 +289,10 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
         m_data = edata.metric_agg_timeseries(df, metric_filter)
 
     m_data.index = pd.to_datetime(m_data.index, unit='s')
-
-    new_idx = pd.date_range(start=m_data.index[0], end=m_data.index[-1],
-                            freq='1S').union(m_data.index)
+    
+    print(app_start_time, pd.to_datetime(app_start_time, unit='s'))
+    new_idx = pd.date_range(start=pd.to_datetime(app_start_time, unit='s'),
+                            end=m_data.index[-1], freq='1S').union(m_data.index)
 
     m_data = m_data.reindex(new_idx).bfill()
     print(m_data)
@@ -306,8 +307,9 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
 
     # Create the resulting figure for current metric
 
+    print("Creating figure")
     fig = figure(sharey=False, refwidth='159.2mm', refaspect=6,
-                 suptitle=fig_title, suptitle_kw={'size': 'x-small'})
+                 suptitle=fig_title, suptitle_kw={'size': 'large'})
 
     if vertical_legend:
         grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
@@ -373,7 +375,7 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
                 return ''
 
         axes.format(xticklabels=format_fn, ylocator=[0.5],
-                    yticklabels=[ylabel_text], ticklabelsize='xx-small')
+                    yticklabels=[ylabel_text], ticklabelsize='small')
 
         data = np.array(m_data_array[i], ndmin=2)
 
@@ -384,13 +386,13 @@ def generate_metric_timeline_fig(df, metric, norm=None, fig_title='',
 
     if not vertical_legend:
         col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False,
-                                     ticklabelsize='xx-small')
+                                     ticklabelsize='small')
 
         fig.colorbar(cm.ScalarMappable(
             cmap='imola_r', norm=norm),
             orientation="horizontal", loc='b', cax=col_bar_ax)
     else:
-        col_bar_ax = fig.add_subplot(grid_sp[:, 1], ticklabelsize='xx-small')
+        col_bar_ax = fig.add_subplot(grid_sp[:, 1], ticklabelsize='small')
         fig.colorbar(cm.ScalarMappable(
             cmap='imola_r', norm=norm),
             loc='r', cax=col_bar_ax)
@@ -417,7 +419,7 @@ def metric_timeline(df, metric, fig_fn, fig_title='', **kwargs):
     fig.savefig(fig_fn)
 
 
-def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, save=False,
+def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn, rel_range=False, save=False,
             title=None, job_id=None, step_id=None, output=None,
             horizontal_legend=False):
     """
@@ -434,10 +436,15 @@ def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, sa
               .pipe(edata.filter_invalid_gpu_series)
               .pipe(edata.df_gpu_node_metrics, config_fn)
               )
+        df_job = (read_data(out_jobs_fn, sep=';')
+                  .pipe(filter_df, id=job_id, step_id=step_id))
     except FileNotFoundError as e:
         print(e)
         return
     else:
+        # We need the application start time
+        app_start_time = df_job.start_mpi_time.to_numpy()[0]
+
         for metric in req_metrics:
             # Get a valid EAR column name
             # metric_name = avail_metrics.get_metric(metric).name
@@ -464,7 +471,7 @@ def runtime(filename, avail_metrics, req_metrics, config_fn, rel_range=False, sa
 
             vertical_legend = not horizontal_legend
 
-            fig = generate_metric_timeline_fig(df, metric_name, norm=norm,
+            fig = generate_metric_timeline_fig(df, app_start_time, metric_name, norm=norm,
                                                fig_title=fig_title,
                                                vertical_legend=vertical_legend)
 
@@ -992,17 +999,18 @@ def parser_action(args):
 
         csv_generated = True
 
-    if args.format == "runtime":
-
-        runtime(args.input_file, read_metrics_configuration(config_file_path),
-                args.metrics, config_file_path, args.relative_range, args.save, args.title,
-                args.job_id, args.step_id, args.output, args.horizontal_legend)
-
-    elif args.format == "ear2prv":
+    if args.format == "runtime" or args.format == "ear2prv":
         head_path, tail_path = path.split(args.input_file)
         out_jobs_path = path.join(head_path,
                                   '.'.join(['out_jobs', tail_path]))
 
+    if args.format == "runtime":
+
+        runtime(args.input_file, out_jobs_path, read_metrics_configuration(config_file_path),
+                args.metrics, config_file_path, args.relative_range, args.save, args.title,
+                args.job_id, args.step_id, args.output, args.horizontal_legend)
+
+    elif args.format == "ear2prv":
         events_data_path = None
         if args.events:
             events_data_path = (path

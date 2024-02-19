@@ -10,7 +10,7 @@
 		},
 		"avg_cpufreq" : {
 			"column_name" : "AVG_CPUFREQ_KHZ",
-			"range" : [2.0e6, 3.6e6]
+			"range" : [1.5e6, 2.4e6]
 		},
 		"avg_imcfreq" : {
 			"column_name" : "AVG_IMCFREQ_KHZ",
