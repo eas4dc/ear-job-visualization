@@ -419,9 +419,12 @@ def metric_timeline(df, metric, fig_fn, fig_title='', **kwargs):
     fig.savefig(fig_fn)
 
 
-def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn, rel_range=False, save=False,
-            title=None, job_id=None, step_id=None, output=None,
-            horizontal_legend=False):
+# def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn, rel_range=False, save=True,
+#             title=None, job_id=None, step_id=None, output=None,
+#             horizontal_legend=False):
+def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
+            rel_range=False, title=None, job_id=None, step_id=None,
+            output=None, horizontal_legend=False):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -475,27 +478,27 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn, rel_ra
                                                fig_title=fig_title,
                                                vertical_legend=vertical_legend)
 
-            if save:
-                name = f'runtime_{metric}'
-                """
-                if job_id:
-                    name = '-'.join([name, str(job_id)])
-                    if step_id is not None:
-                        name = '-'.join([name, str(step_id)])
-                """
+            # if save:
+            name = f'runtime_{metric}'
+            """
+            if job_id:
+                name = '-'.join([name, str(job_id)])
+                if step_id is not None:
+                    name = '-'.join([name, str(step_id)])
+            """
 
-                if output:
-                    if path.isdir(output):
+            if output:
+                if path.isdir(output):
 
-                        name = path.join(output, name)
-                    else:
-                        name = '-'.join([name, output])
+                    name = path.join(output, name)
+                else:
+                    name = '-'.join([name, output])
 
-                print(f'storing figure {name}')
+            print(f'storing figure {name}')
 
-                fig.savefig(name, dpi='figure')
-            else:
-                fig.show()
+            fig.savefig(name, dpi='figure')
+            # else:
+            #     fig.show()
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_id=None,
@@ -921,7 +924,7 @@ def eacct(result_format, jobid, stepid, ear_events=False):
     returned.
 
     Basic command for each format:
-        runtime -> -r
+        runtime -> -r -o
         ear2prv -> -r -o
         summary -> -l
 
@@ -934,13 +937,10 @@ def eacct(result_format, jobid, stepid, ear_events=False):
 
     csv_file = f'tmp_{jobid}_{stepid}.csv'
 
-    if result_format == 'runtime':
-        cmd = ['eacct', '-j', f'{jobid}.{stepid}', '-r', '-c', csv_file]
-    elif result_format == "ear2prv":
+    if result_format == 'runtime' or result_format == "ear2prv":
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-o", "-c", csv_file]
     elif result_format == 'summary':
         cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-l", "-c", csv_file]
-
     else:
         print("Unrecognized format: Please contact with support@eas4dc.com")
         sys.exit()
@@ -970,7 +970,7 @@ def eacct(result_format, jobid, stepid, ear_events=False):
 
     if result_format == 'summary':
         output_fn = '.'.join(['loops', csv_file])
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-c', output_fn]
+        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-o', '-c', output_fn]
         res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     # Return generated file
@@ -1006,8 +1006,11 @@ def parser_action(args):
 
     if args.format == "runtime":
 
+        # runtime(args.input_file, out_jobs_path, read_metrics_configuration(config_file_path),
+        #         args.metrics, config_file_path, args.relative_range, args.save, args.title,
+        #         args.job_id, args.step_id, args.output, args.horizontal_legend)
         runtime(args.input_file, out_jobs_path, read_metrics_configuration(config_file_path),
-                args.metrics, config_file_path, args.relative_range, args.save, args.title,
+                args.metrics, config_file_path, args.relative_range, args.title,
                 args.job_id, args.step_id, args.output, args.horizontal_legend)
 
     elif args.format == "ear2prv":
@@ -1124,11 +1127,13 @@ def build_parser():
     # ONLY for runtime format
     runtime_group_args = parser.add_argument_group('`runtime` format options')
 
+    """
     group = runtime_group_args.add_mutually_exclusive_group()
     group.add_argument('--save', action='store_true',
                        help='Activate the flag to store resulting figures.')
     group.add_argument('--show', action='store_true',
                        help='Show the resulting figure (default).')
+    """
 
     runtime_group_args.add_argument('-t', '--title',
                                     help="""Set the resulting figure title.
