@@ -308,7 +308,7 @@ def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_titl
     # Create the resulting figure for current metric
 
     print("Creating figure")
-    fig = figure(sharey=False, refwidth='159.2mm', refaspect=6,
+    fig = figure(sharey=False, refwidth='159.2mm', refaspect=30,
                  suptitle=fig_title, suptitle_kw={'size': 'large'})
 
     if vertical_legend:
