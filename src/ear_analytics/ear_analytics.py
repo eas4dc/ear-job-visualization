@@ -1070,6 +1070,7 @@ def parser_action(args):
 
     if csv_generated and not args.keep_csv:
         system(f'rm {input_file}')
+        system(f'rm {out_jobs_path}')
         if args.format == 'ear2prv':
             system(f'rm {out_jobs_path}')
             if args.events:
@@ -1108,12 +1109,17 @@ def build_parser():
                             epilog='Contact: support@eas4dc.com')
     parser.add_argument('--version', action='version', version='%(prog)s 4.2')
 
+    # parser.add_argument('--format', required=True,
+    #                     choices=['runtime', 'ear2prv', 'summary'],
+    #                     help='''Build results according to chosen format:
+    #                     runtime (static images) or ear2prv (using paraver
+    #                     tool) (ear2prv UNSTABLE). summary option builds
+    #                     a small report about the job metrics.''')
+
     parser.add_argument('--format', required=True,
-                        choices=['runtime', 'ear2prv', 'summary'],
+                        choices=['runtime'],
                         help='''Build results according to chosen format:
-                        runtime (static images) or ear2prv (using paraver
-                        tool) (ear2prv UNSTABLE). summary option builds
-                        a small report about the job metrics.''')
+                        runtime (static images).''')
 
     parser.add_argument('--input-file', help=('''Specifies the input file(s)
                                               name(s) to read data from.
@@ -1172,13 +1178,6 @@ def build_parser():
     events_help_str = 'Include EAR events in the trace fille.'
     ear2prv_group_args.add_argument('-e', '--events', action='store_true',
                                     help=events_help_str)
-
-    """
-    events_config_help_str = ('Specify a (JSON formatted) file with event'
-                              ' types categories. Default: events_config.json')
-    ear2prv_group_args.add_argument('--events-config',
-                                    help=events_config_help_str)
-    """
 
     parser.add_argument('-o', '--output',
                         help="""Sets the output file name.
