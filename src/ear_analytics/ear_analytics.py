@@ -290,7 +290,7 @@ def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_titl
 
     m_data.index = pd.to_datetime(m_data.index, unit='s')
     
-    print(app_start_time, pd.to_datetime(app_start_time, unit='s'))
+    # print(app_start_time, pd.to_datetime(app_start_time, unit='s'))
     new_idx = pd.date_range(start=pd.to_datetime(app_start_time, unit='s'),
                             end=m_data.index[-1], freq='1S').union(m_data.index)
 
@@ -463,6 +463,7 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
                 norm = Normalize(vmin=metric_range[0],
                                  vmax=metric_range[1], clip=True)
 
+            # TODO: Add the min/max value of the metric (relative range always)
             fig_title = metric
             if title:  # We preserve the title got by the user
                 fig_title = f'{title}: {metric}'
@@ -504,6 +505,26 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
 def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_id=None,
             step_id=None, output_fn=None, events_config_fn=None):
 
+
+    def insert_initial_values(df_loops, df_job):
+        """
+        This function inserts a row on df_loops for each unique
+        job, step, node tuple, with all values to 0 except TIMESTAMP,
+        got from the corresponding job, step in df_job.
+        """
+        keys = df_loops.groupby(['JOBID', 'STEPID', 'NODENAME']).groups.keys()
+
+        jobs = [job for job, _, _ in keys]
+        steps = [step for _, step, _ in keys]
+        nodes = [node for _, _, node in keys]
+
+        timestamps = [df_job.loc[(df_job.JOBID == job) & (df_job.STEPID == step),
+                                 'start_time'].at[idx] for idx, (job, step, _) in enumerate(keys)]
+
+        new_df = pd.DataFrame({'JOBID': jobs, 'STEPID': steps, 'NODENAME': nodes, 'TIMESTAMP': timestamps})
+        return df_loops.merge(new_df, how='outer').fillna(0)
+
+
     # Read the Job data
 
     df_job = (read_data(job_data_fn, sep=';')
@@ -518,6 +539,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
 
     df_loops = (read_data(loop_data_fn, sep=';')
                 .pipe(filter_df, JOBID=job_id, STEPID=step_id)
+                .pipe(insert_initial_values, df_job)
                 .merge(df_job)
                 .assign(
                     # Paraver works with integers
@@ -526,7 +548,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
                     IO_MBS=lambda df: df.IO_MBS * 1000000,
                     # Paraver works at microsecond granularity
                     time=lambda df: (df.TIMESTAMP -
-                                     df.start_time) * 1000000
+                                     np.min(df_job.start_time)) * 1000000
                     )
                 .join(pd.Series(dtype=np.int64, name='task_id'))
                 .join(pd.Series(dtype=np.int64, name='app_id'))
@@ -556,6 +578,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
 
     df_events = None
 
+    # TODO: time must be computed based on the start of the batch job
     if events_data_fn:
         cols_dict = {'JOBID': 'Job_id', 'STEPID': 'Step_id'}
 
@@ -575,6 +598,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
                      )
+    else:
+        print("No events file provided.")
 
     # ### Paraver trace header
     #
@@ -607,6 +632,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
         f_time = (np.max(df_job.end_time) -
                   np.min(df_job.start_time)) * 1000000
 
+        print(f'Number of nodes: {n_nodes}. Total trace duration: {f_time}')
+
     # #### Getting Application info
     #
     # An EAR Job-Step is a Paraver Application
@@ -618,6 +645,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
 
     appl_info = df_loops.groupby(['JOBID', 'STEPID']).groups
     n_appl = len(appl_info)
+
+    print(f'Number of applications: {n_appl}')
 
     # #### Generating the Application list and
     # Paraver's Names Configuration File (.row)
@@ -635,8 +664,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
     appl_lvl_names = f'LEVEL APPL SIZE {n_appl}'
 
     # The task level names section can be created here.
-    # WARNING Assuming that we are only dealing with one application
-    task_lvl_names = f'LEVEL TASK SIZE {n_nodes * n_appl}'
+    # task_lvl_names = f'LEVEL TASK SIZE {n_nodes * n_appl}'
+    task_lvl_names = ''
 
     total_task_cnt = 0  # The total number of tasks
 
@@ -667,7 +696,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
                 return
 
         n_tasks = appl_nodes.size
-        total_task_cnt += n_tasks
+        total_task_cnt += n_tasks  # Task count used after the for loop
 
         # An EAR GPU is a Paraver thread
         gpu_info = df_app.filter(regex=r'GPU\d_POWER_W').columns
@@ -709,17 +738,20 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
                               (df_events['node_id'] == node_name), 'task_id'] \
                     = np.int64(node_idx + 1)
 
-            task_lvl_names = '\n'.join([task_lvl_names, f' {node_name}'])
+            task_lvl_names = '\n'.join([task_lvl_names,
+                                        f'({app_job}.{app_step}) {node_name}'])
 
             # THREAD NAMES
             for gpu_idx in range(n_threads):
                 (thread_lvl_names
-                 .append(f'GPU {gpu_idx} @ {node_name}'))
+                 .append(f'({app_job}.{app_step}) GPU {gpu_idx} @ {node_name}'))
 
         # APPL level names
         appl_lvl_names = '\n'.join([appl_lvl_names,
-                                    f'({np.int64(appl_idx + 1)})'
+                                    f'({app_job}.{app_step})'
                                     f' {df_app.app_name.unique()[0]}'])
+
+    task_lvl_names = ''.join([f'LEVEL TASK SIZE {total_task_cnt}', task_lvl_names])
 
     # The resulting Application List
     appl_list_str = ':'.join(appl_lists)
@@ -915,32 +947,37 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
         pcf_file.write(paraver_conf_file_str)
 
 
-def eacct(result_format, jobid, stepid, ear_events=False):
+def eacct(result_format, jobid, stepid=None, ear_events=False):
     """
     This function calls properly the `eacct` command in order
     to get files to be worked by `result_format` feature.
 
-    The filename where data is stored is "tmp_<jobid>_<stepid>.csv", which is
-    returned.
+    The filename where data is stored is "tmp_<jobid>[_<stepid>].csv", which is
+    returned as str. '_<stepid>' region depends on whether `stepid` parameter is not
+    None.
 
     Basic command for each format:
-        runtime -> -r -o
-        ear2prv -> -r -o
-        summary -> -l
+        runtime -> -r -o -> Generates [out_jobs.]tmp_<jobid>[_<stepid>].csv
+        ear2prv -> -r -o -> Generates [out_jobs.]tmp_<jobid>[_<stepid>].csv
+        summary -> -l -> Generates [events.]tmp_<jobid>[_<stepid>].csv
 
     If the requested format is "summary" or `ear_events` is True, an
     additional call is done requesting for events, i.e., `eacct -x`.
-
-    The resulting filename is "events.tmp_<jobid>_<stepid>.csv", but note that
-    the function still returning the basic command filename.
+    The resulting filename is "events.tmp_<jobid>[_<stepid>].csv", but note that
+    the function is still returning the basic command filename.
     """
 
-    csv_file = f'tmp_{jobid}_{stepid}.csv'
+    if stepid is None:
+        csv_file = f'tmp_{jobid}.csv'
+        job_fmt = f'{jobid}'
+    else:
+        csv_file = f'tmp_{jobid}_{stepid}.csv'
+        job_fmt = f'{jobid}.{stepid}'
 
     if result_format == 'runtime' or result_format == "ear2prv":
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", "-o", "-c", csv_file]
+        cmd = ["eacct", "-j", job_fmt, "-r", "-o", "-c", csv_file]
     elif result_format == 'summary':
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-l", "-c", csv_file]
+        cmd = ["eacct", "-j", job_fmt, "-l", "-c", csv_file]
     else:
         print("Unrecognized format: Please contact with support@eas4dc.com")
         sys.exit()
@@ -958,19 +995,19 @@ def eacct(result_format, jobid, stepid, ear_events=False):
         sys.exit()
 
     if "No loops retrieved" in res.stdout.decode('utf-8'):
-        print(f"eacct: {jobid}.{stepid} No loops retrieved")
+        print("eacct:", job_fmt, "No loops retrieved")
         sys.exit()
 
     # Request EAR events
 
     if ear_events or result_format == 'summary':
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-x", '-c',
+        cmd = ["eacct", "-j", job_fmt, "-x", '-c',
                '.'.join(['events', csv_file])]
         res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     if result_format == 'summary':
         output_fn = '.'.join(['loops', csv_file])
-        cmd = ["eacct", "-j", f"{jobid}.{stepid}", "-r", '-o', '-c', output_fn]
+        cmd = ["eacct", "-j", job_fmt, "-r", '-o', '-c', output_fn]
         res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     # Return generated file
@@ -1072,7 +1109,7 @@ def parser_action(args):
         system(f'rm {input_file}')
         system(f'rm {out_jobs_path}')
         if args.format == 'ear2prv':
-            system(f'rm {out_jobs_path}')
+            # system(f'rm {out_jobs_path}')
             if args.events:
                 system(f'rm {events_data_path}')
         if args.format == 'summary':
@@ -1109,17 +1146,12 @@ def build_parser():
                             epilog='Contact: support@eas4dc.com')
     parser.add_argument('--version', action='version', version='%(prog)s 4.2')
 
-    # parser.add_argument('--format', required=True,
-    #                     choices=['runtime', 'ear2prv', 'summary'],
-    #                     help='''Build results according to chosen format:
-    #                     runtime (static images) or ear2prv (using paraver
-    #                     tool) (ear2prv UNSTABLE). summary option builds
-    #                     a small report about the job metrics.''')
-
     parser.add_argument('--format', required=True,
-                        choices=['runtime'],
+                        choices=['runtime', 'ear2prv', 'summary'],
                         help='''Build results according to chosen format:
-                        runtime (static images).''')
+                        runtime (static images) or ear2prv (using paraver
+                        tool) (ear2prv UNSTABLE). summary option builds
+                        a small report about the job metrics.''')
 
     parser.add_argument('--input-file', help=('''Specifies the input file(s)
                                               name(s) to read data from.
@@ -1127,7 +1159,7 @@ def build_parser():
 
     parser.add_argument('-j', '--job-id', type=int, required=True,
                         help='Filter the data by the Job ID.')
-    parser.add_argument('-s', '--step-id', type=int, required=True,
+    parser.add_argument('-s', '--step-id', type=int, required=False,
                         help='Filter the data by the Step ID.')
 
     # ONLY for runtime format
