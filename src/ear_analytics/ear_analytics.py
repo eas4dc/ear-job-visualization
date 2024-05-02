@@ -519,7 +519,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
         nodes = [node for _, _, node in keys]
 
         timestamps = [df_job.loc[(df_job.JOBID == job) & (df_job.STEPID == step),
-                                 'start_time'].at[idx] for idx, (job, step, _) in enumerate(keys)]
+                                 'start_time'].iat[0] for job, step, _ in keys]
 
         new_df = pd.DataFrame({'JOBID': jobs, 'STEPID': steps, 'NODENAME': nodes, 'TIMESTAMP': timestamps})
         return df_loops.merge(new_df, how='outer').fillna(0)
