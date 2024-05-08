@@ -510,19 +510,16 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
         """
         This function inserts a row on df_loops for each unique
         job, step, node tuple, with all values to 0 except TIMESTAMP,
-        got from the corresponding job, step in df_job.
+        got from start_time of the corresponding job, step in df_job.
         """
-        keys = df_loops.groupby(['JOBID', 'STEPID', 'NODENAME']).groups.keys()
+        
+        # start_time column is also changed to TIMESTAMP
+        df_job_with_nodes = (df_loops
+                             .merge(df_job).loc[:, ['JOBID', 'STEPID', 'NODENAME', 'start_time']]
+                             .rename({'start_time': 'TIMESTAMP'}, axis=1))
 
-        jobs = [job for job, _, _ in keys]
-        steps = [step for _, step, _ in keys]
-        nodes = [node for _, _, node in keys]
-
-        timestamps = [df_job.loc[(df_job.JOBID == job) & (df_job.STEPID == step),
-                                 'start_time'].iat[0] for job, step, _ in keys]
-
-        new_df = pd.DataFrame({'JOBID': jobs, 'STEPID': steps, 'NODENAME': nodes, 'TIMESTAMP': timestamps})
-        return df_loops.merge(new_df, how='outer').fillna(0)
+        # df_job with node information and TIMESTAMP can be merged with loops
+        return df_loops.merge(df_job_with_nodes, how='outer').fillna(0)
 
 
     # Read the Job data
