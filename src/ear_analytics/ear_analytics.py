@@ -342,7 +342,8 @@ def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_titl
         print(norm)
 
     gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC)')
+                            r'UTIL_PERC|MEM_UTIL_PERC|'
+                            r'(10[01][0-9]))')
     gpu_metric_regex = re.compile(gpu_metric_regex_str)
 
     for i, _ in enumerate(m_data_array):

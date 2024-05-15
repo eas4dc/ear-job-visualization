@@ -18,7 +18,8 @@ def df_get_valid_gpu_data(df):
     on EAR's output.
     """
     gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC)')
+                            r'UTIL_PERC|MEM_UTIL_PERC|'
+                            r'(10[01][0-9]))')
     return (df
             .filter(regex=gpu_metric_regex_str)
             .mask(lambda x: x == 0)  # All 0s as nan
@@ -42,7 +43,8 @@ def filter_invalid_gpu_series(df):
     on EAR's output.
     """
     gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC)')
+                            r'UTIL_PERC|MEM_UTIL_PERC|'
+                            r'(10[01][0-9]))')
 
     return (df
             .drop(df  # Erase GPU columns
@@ -66,6 +68,8 @@ def df_gpu_node_metrics(df, conf_fn):
     gpu_util_regex = metric_regex('gpu_util', metrics_conf)
     gpu_memutil_regex = metric_regex('gpu_memutil', metrics_conf)
 
+    gr_active_regex = metric_regex('dcgmi_gr_engine_active', metrics_conf)
+
     return (df
             .assign(
                 tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_regex)
@@ -85,6 +89,8 @@ def df_gpu_node_metrics(df, conf_fn):
 
                 avg_gpu_memutil=lambda x: (x.filter(regex=gpu_memutil_regex)
                                            .mean(axis=1)),  # Avg %GPU mem util
+                avg_gr_engine_active=lambda x: (x.filter(regex=gr_active_regex)
+                                                .mean(axis=1))
                 ))
 
 

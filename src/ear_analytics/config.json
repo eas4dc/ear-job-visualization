@@ -158,6 +158,10 @@
 		"dcgmi_pcie_rx_bytes" : {
 			"column_name" : "GPU(\\d)_1010",
 			"display_name" : "PCIe Rx Bandwidth (B/s)"
+		},
+		"avg_gr_engine_active" : {
+				"column_name"	: "avg_gr_engine_active",
+				"range" : [0, 1]
 		}
 	},
 	"events" : {
