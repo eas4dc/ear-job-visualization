@@ -523,6 +523,19 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
         return df_loops.merge(df_job_with_nodes, how='outer').fillna(0)
 
 
+    def multiply_floats_by_1000000(df):
+        df_floats = (df.select_dtypes(include=['float64'])
+                     .apply(lambda x: x*1000000)
+                     .astype('int64'))
+        df_non_float = df.select_dtypes(exclude=['float64'])
+        return df_floats.join(df_non_float)
+
+
+    def print_df(df):
+        print(df)
+        return df
+
+
     # Read the Job data
 
     df_job = (read_data(job_data_fn, sep=';')
@@ -533,21 +546,22 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
                                                   "step_id": "STEPID",
                                                   'app_id': 'app_name'}))
               )
-    # Read the Loop data
 
+    # Read the Loop data
     df_loops = (read_data(loop_data_fn, sep=';')
                 .pipe(filter_df, JOBID=job_id, STEPID=step_id)
                 .pipe(insert_initial_values, df_job)
                 .merge(df_job)
                 .assign(
                     # Paraver works with integers
-                    CPI=lambda df: df.CPI * 1000000,
-                    ITER_TIME_SEC=lambda df: df.ITER_TIME_SEC * 1000000,
-                    IO_MBS=lambda df: df.IO_MBS * 1000000,
                     # Paraver works at microsecond granularity
                     time=lambda df: (df.TIMESTAMP -
                                      np.min(df_job.start_time)) * 1000000
                     )
+                # Drop unnecessary columns
+                .drop(['LOOPID', 'LOOP_NEST_LEVEL', 'LOOP_SIZE',
+                       'TIMESTAMP', 'start_time', 'end_time', 'ELAPSED'], axis=1)
+                .pipe(multiply_floats_by_1000000)
                 .join(pd.Series(dtype=np.int64, name='task_id'))
                 .join(pd.Series(dtype=np.int64, name='app_id'))
                 .join(pd.Series(dtype=np.int64, name='gpu_power'))
@@ -555,21 +569,6 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, events_data_fn=None, job_i
                 .join(pd.Series(dtype=np.int64, name='gpu_mem_freq'))
                 .join(pd.Series(dtype=np.int64, name='gpu_util'))
                 .join(pd.Series(dtype=np.int64, name='gpu_mem_util'))
-                .astype(
-                    {'ITER_TIME_SEC': np.int64,
-                     'CPI': np.int64,
-                     'TPI': np.int64,
-                     'MEM_GBS': np.int64,
-                     'IO_MBS': np.int64,
-                     'PERC_MPI': np.int64,
-                     'DC_NODE_POWER_W': np.int64,
-                     'DRAM_POWER_W': np.int64,
-                     'PCK_POWER_W': np.int64,
-                     'GFLOPS': np.int64,
-                     })
-                # Drop unnecessary columns
-                .drop(['LOOPID', 'LOOP_NEST_LEVEL', 'LOOP_SIZE',
-                       'TIMESTAMP', 'start_time', 'end_time'], axis=1)
                 )
 
     # Read EAR events data
