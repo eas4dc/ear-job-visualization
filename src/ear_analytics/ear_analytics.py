@@ -889,22 +889,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                                end_time=lambda df: (df.end_time -  df_job.start_time.min()) * 1000000)
                        .reset_index()
                        )
-    df_task_not_created = (DataFrame(df_task_running)
-                           .assign(state_id = 2,  # 2 -> Not created
-                                   end_time = lambda df: df.start_time,
-                                   start_time = 0)
-                           )
-    df_task_ended = (DataFrame(df_task_running)
-                     .assign(state_id = 0,  # 0 -> Idle
-                             start_time = lambda df: df.end_time,
-                             end_time = f_time)
-                     )
-
-    df_states = concat([df_task_running, df_task_not_created, df_task_ended], ignore_index=True)
-    print(df_states.info())
 
     smft = '1:0:{app_id}:{task_id}:1:{start_time}:{end_time}:{state_id}'.format
-    states_body_list = (df_states
+    states_body_list = (df_task_running
                         .apply(lambda x: smft(**x), axis=1)
                         .to_list()
                         )
