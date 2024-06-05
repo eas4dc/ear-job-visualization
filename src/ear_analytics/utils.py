@@ -1,6 +1,11 @@
 """ Util functions. """
 
 
+from functools import reduce
+
+from .io_api import read_configuration
+
+
 def filter_df(data_f, **kwargs):
     """
     Filters the DataFrame `data_f`. **kwargs keys indicate the DataFrame
@@ -27,3 +32,18 @@ def join_metric_node(df):
     "Given a DataFrame df, returns it flattening it's columns MultiIndex."
     df.columns = df.columns.to_flat_index()
     return df
+
+
+def read_job_data_config(filename):
+    return read_configuration(filename)['job']
+
+
+def read_loop_data_config(filename):
+    return read_configuration(filename)['loop']
+
+
+def function_compose(*funcs):
+    def compose(f, g):
+        return lambda x: f(g(x))
+
+    return reduce(compose, funcs)
