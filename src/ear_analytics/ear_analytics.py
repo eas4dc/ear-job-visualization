@@ -896,6 +896,31 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                         .to_list()
                         )
 
+    # Start time and end time events
+    start_end_event_ids = {event : columns.get_loc(event) for event in ['start_time', 'end_time']}
+
+    df_start_end_time = (df_loops
+                         .groupby(['app_id', 'task_id'])[['start_time', 'end_time']].max()
+                         .reset_index()
+                         .melt(id_vars=['app_id', 'task_id'])
+                         .assign(
+                             event_id=lambda df: df.variable.map(lambda x: start_end_event_ids[x]),
+                             time=lambda df: (df.value - df_job.start_time.min()) * 1000000
+                             )
+                         .drop(columns='variable')
+                         )
+
+    smft = '2:0:{app_id}:{task_id}:1:{time}:{event_id}:{value}'.format
+    start_end_body_list = (df_start_end_time
+                           .apply(lambda x: smft(**x), axis=1)
+                           .to_list()
+                           )
+
+    start_end_event_types = [f'EVENT_TYPE\n0\t{start_end_event_ids[event]}'
+                             f'\t{event}\n' for event in start_end_event_ids]
+    event_typ_lst += start_end_event_types
+
+
     def sort_by_record_type(trace_list):
         """
         Descending order
@@ -912,7 +937,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
     # of sorted() stable property: https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
     sort_by_type_and_time = function_compose(sort_by_timestamp, sort_by_record_type)
 
-    body_list_sorted = sort_by_type_and_time(chain(states_body_list, body_list))
+    body_list_sorted = sort_by_type_and_time(chain(states_body_list, body_list, start_end_body_list))
 
 
     # #### EAR events body and configuration
