@@ -581,8 +581,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         return df_floats.join(df_non_float)
 
 
-    def insert_jobname(df_loops, df_job):
-        return df_loops.merge(df_job[['JOBID', 'STEPID', 'APPID', 'JOBNAME']])
+    def insert_jobdata(df_loops, df_job):
+        return df_loops.merge(df_job[['JOBID', 'STEPID', 'APPID', 'JOBNAME', 'START_TIME', 'END_TIME']])
 
 
     def print_df(df):
@@ -614,7 +614,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                                      df_job.START_TIME.min()) * 1000000
                     )
                 .pipe(multiply_floats_by_1000000)
-                .pipe(insert_jobname, df_job)
+                .pipe(insert_jobdata, df_job)
                 .join(Series(dtype='Int64', name='task_id'))
                 .join(Series(dtype='Int64', name='app_id'))
                 .join(Series(dtype='Int64', name='gpu_power'))
@@ -624,6 +624,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                 .join(Series(dtype='Int64', name='gpu_mem_util'))
                 .join(Series(dtype='Int64', name='gpu_gflops'))
                 )
+    print(df_loops.info())
 
     # Read EAR events data
 
@@ -839,7 +840,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                                       'time', 'task_id', 'app_id', 'JOBNAME',
                                       'gpu_power', 'gpu_freq', 'gpu_mem_freq',
                                       'gpu_util', 'gpu_mem_util', 'gpu_gflops',
-                                      'TIMESTAMP']
+                                      'TIMESTAMP', 'START_TIME', 'END_TIME']
                              ).columns
                )
     print(metrics)
@@ -910,7 +911,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
 
     # States body and configuration
     df_states = (df_loops
-                       .merge(df_job[['JOBID', 'STEPID', 'APPID', 'START_TIME', 'END_TIME']])
                        .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
                        .assign(state_id=1,  # 1 -> Running
                                START_TIME=lambda df: (df.START_TIME - df_job.START_TIME.min()) * 1000000,
