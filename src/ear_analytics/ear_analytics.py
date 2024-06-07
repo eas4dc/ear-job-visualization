@@ -917,7 +917,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                                END_TIME=lambda df: (df.END_TIME -  df_job.START_TIME.min()) * 1000000)
                        .reset_index()
                        )
-    print(df_states.info())
 
     smft = '1:0:{app_id}:{task_id}:1:{START_TIME}:{END_TIME}:{state_id}'.format
     states_body_list = (df_states
