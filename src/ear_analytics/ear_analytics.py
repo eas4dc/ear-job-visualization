@@ -925,15 +925,15 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                         )
 
     # Start time and end time events
-    start_end_event_ids = {event : columns.get_loc(event) for event in ['start_time', 'end_time']}
+    start_end_event_ids = {event : columns.get_loc(event) for event in ['START_TIME', 'END_TIME']}
 
     df_start_end_time = (df_loops
-                         .groupby(['app_id', 'task_id'])[['start_time', 'end_time']].max()
+                         .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
                          .reset_index()
                          .melt(id_vars=['app_id', 'task_id'])
                          .assign(
                              event_id=lambda df: df.variable.map(lambda x: start_end_event_ids[x]),
-                             time=lambda df: (df.value - df_job.start_time.min()) * 1000000
+                             time=lambda df: (df.value - df_job.START_TIME.min()) * 1000000
                              )
                          .drop(columns='variable')
                          )
