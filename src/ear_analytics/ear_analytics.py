@@ -558,7 +558,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                 nodes += [n]
                 times += [task_start_time.iat[0]]  # There is a unique element
             else:
-                print(f"Warning! Job data hasn't information about job {j} step {s} app {a}")
+                print(f"Warning! Job data hasn't information about job {j} step {s} app {a}. This job-step-app won't be on the output trace.")
         
         df_start_time = DataFrame({'JOBID': jobs, 'STEPID': steps, 'APPID': apps, 'NODENAME': nodes, 'TIMESTAMP': times}, columns=df_loops.columns).fillna(0)
 
@@ -624,7 +624,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                 .join(Series(dtype='Int64', name='gpu_mem_util'))
                 .join(Series(dtype='Int64', name='gpu_gflops'))
                 )
-    print(df_loops.info())
+    # print(df_loops.info())
 
     # Read EAR events data
 
@@ -650,8 +650,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
                      )
-    else:
-        print("No events file provided.")
+    # else:
+        # print("No events file provided.")
 
     # ### Paraver trace header
     #
@@ -843,7 +843,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                                       'TIMESTAMP', 'START_TIME', 'END_TIME']
                              ).columns
                )
-    print(metrics)
 
     # We first sort data by timestamp in ascending
     # order as specified by Paraver trace format.
@@ -899,7 +898,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
     metrics = (df_loops
                .drop(columns=df_loops.filter(regex=cols_regex).columns)
                .columns)
-    print(metrics)
 
     # A map with metric_name metric_idx
     metric_event_typ_map = {metric: trace_sorted_df.columns.get_loc(metric)
@@ -1054,8 +1052,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                                                 ]
                                                )
                                          )
-    else:
-        print('There are not EAR events.')
+    # else:
+    #     print('There are not EAR events.')
 
     with open('.'.join([output_fn, 'pcf']), 'w') as pcf_file:
         pcf_file.write(paraver_conf_file_str)
