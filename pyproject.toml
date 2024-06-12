@@ -18,11 +18,11 @@ classifiers = [
 ]
 version = "0.0.1"
 dependencies = [
-    "proplot",
+		"matplotlib",
     "pandas",
     "pylatex",
     "jinja2",
-    "importlib_resources"
+    "importlib_resources",
 ]
 
 [project.scripts]

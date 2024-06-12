@@ -16,9 +16,9 @@ from pylatex import Command
 
 from heapq import merge
 
-from proplot import figure, GridSpec
 from matplotlib import cm
 from matplotlib.colors import Normalize
+import matplotlib.pyplot as plt
 
 from importlib_resources import files
 
@@ -274,7 +274,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                     fig_title='DC node power (W)')
 
 
-def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_title='',
+def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, norm=None, fig_title='',
                                  vertical_legend=False, granularity='node'):
     """
     Generates the timeline gradient.
@@ -295,33 +295,39 @@ def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_titl
     
     # print(app_start_time, to_datetime(app_start_time, unit='s'))
     new_idx = date_range(start=to_datetime(app_start_time, unit='s'),
-                            end=m_data.index[-1], freq='1S').union(m_data.index)
+                         end=to_datetime(app_end_time, unit='s'), freq='1s').union(m_data.index)
 
     m_data = m_data.reindex(new_idx).bfill()
     print(m_data)
 
     m_data_array = m_data.values.transpose()
+    print(m_data_array)
+
     if granularity == 'app':
         m_data_array = m_data_array.reshape(1, m_data_array.shape[0])
 
     # Compute time deltas to be showed to
     # the end user instead of an absolute timestamp.
     time_deltas = [i - m_data.index[0] for i in m_data.index]
+    print(time_deltas, len(time_deltas))
 
     # Create the resulting figure for current metric
 
     print("Creating figure")
-    fig = figure(sharey=False, refwidth='159.2mm', refaspect=30,
-                 suptitle=fig_title, suptitle_kw={'size': 'large'})
+    # fig = figure(sharey=False, refwidth='159.2mm', refaspect=30,
+    #              suptitle=fig_title, suptitle_kw={'size': 'large'})
 
     if vertical_legend:
-        grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-                           width_ratios=(0.95, 0.05), hspace=0)
+        fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
+                                squeeze=False, gridspec_kw={'hspace': 0},
+                                layout='constrained'
+                                )
+        fig.set_figwidth(6.27)
+        # grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
+        #                    width_ratios=(0.95, 0.05), hspace=0)
     else:
         def metric_row(i):
-
-            # returns whether row i corresponds to a metric timeline.
-
+            """returns whether row i corresponds to a metric timeline."""
             return i < len(m_data_array)
 
         height_ratios = [0.8 / len(m_data_array)
@@ -331,9 +337,14 @@ def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_titl
         hspaces = [0 if metric_row(i + 1) else None
                    for i in range(len(m_data_array))]
 
-        grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1,
-                           hratios=height_ratios,
-                           hspace=hspaces)
+        # grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1,
+        #                    hratios=height_ratios,
+        #                    hspace=hspaces)
+        fig, axs = plt.subplots(nrows=len(m_data_array) + 1, ncols=1,
+                                hratios=height_ratios, hspace=hspaces)
+
+    axs[0, 0].set_title(fig_title)
+    axs[0, 0].grid(axis='x', alpha=0.5)
 
     # grid_sp = GridSpec(nrows=len(m_data_array), ncols=1, hspace=0)
 
@@ -362,44 +373,46 @@ def generate_metric_timeline_fig(df, app_start_time, metric, norm=None, fig_titl
             ylabel_text = ''
 
         if vertical_legend:
-            axes = fig.add_subplot(grid_sp[i, 0])
+            axes = axs[i, 0] # fig.add_subplot(grid_sp[i, 0])
         else:
-            axes = fig.add_subplot(grid_sp[i])
+            axes = axs[i] # fig.add_subplot(grid_sp[i])
 
-        def format_fn(tick_val, tick_pos):
+        def format_fn(tick_val):
             """
             Map each tick with the corresponding
             elapsed time to label the timeline.
             """
-            values_range = range(len(m_data_array[0]))
+            return time_deltas[tick_val].seconds
 
-            if int(tick_val) in values_range:
-                return time_deltas[int(tick_val)].seconds
-            else:
-                return ''
+        
+        # axes.format(xticklabels=format_fn, ylocator=[0.5],
+        #             yticklabels=[ylabel_text], ticklabelsize='small')
+        xticks = np.arange(len(m_data_array[0]), step=20)
+        xticklabels = map(format_fn, xticks)
 
-        axes.format(xticklabels=format_fn, ylocator=[0.5],
-                    yticklabels=[ylabel_text], ticklabelsize='small')
+        axes.set_xticks(xticks, labels=xticklabels)
+        axes.minorticks_on()
 
+        axes.set_yticks([0], labels=[ylabel_text])
         data = np.array(m_data_array[i], ndmin=2)
 
         # Generate the timeline gradient
-        axes.imshow(data, cmap='imola_r',
-                    norm='linear', aspect='auto', discrete=False,
+        axes.imshow(data, norm='linear', aspect=5, cmap='viridis_r',
                     vmin=norm.vmin, vmax=norm.vmax)
 
     if not vertical_legend:
-        col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False,
+        col_bar_ax = fig.add_subplot(axs[-1], autoshare=False,
                                      ticklabelsize='small')
+        # col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False,
+        #                              ticklabelsize='small')
 
         fig.colorbar(cm.ScalarMappable(
             cmap='imola_r', norm=norm),
             orientation="horizontal", loc='b', cax=col_bar_ax)
     else:
-        col_bar_ax = fig.add_subplot(grid_sp[:, 1], ticklabelsize='small')
-        fig.colorbar(cm.ScalarMappable(
-            cmap='imola_r', norm=norm),
-            loc='r', cax=col_bar_ax)
+        # col_bar_ax = axs[:, 1] # fig.add_subplot(grid_sp[:, 1], ticklabelsize='small')
+        fig.colorbar(cm.ScalarMappable(norm=norm, cmap='viridis_r'), ax=axs,
+                     location='bottom', shrink=0.6, label=f'{metric}')
 
     return fig
 
@@ -450,7 +463,8 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
         return
     else:
         # We need the application start time
-        app_start_time = df_job.start_mpi_time.to_numpy()[0]
+        app_start_time = df_job.START_TIME.to_numpy()[0]
+        app_end_time = df_job.END_TIME.to_numpy()[0]
 
         for metric in req_metrics:
             # Get a valid EAR column name
@@ -479,7 +493,7 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
 
             vertical_legend = not horizontal_legend
 
-            fig = generate_metric_timeline_fig(df, app_start_time, metric_name, norm=norm,
+            fig = generate_metric_timeline_fig(df, app_start_time, app_end_time, metric_name, norm=norm,
                                                fig_title=fig_title,
                                                vertical_legend=vertical_legend)
 
@@ -501,7 +515,7 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
 
             print(f'storing figure {name}')
 
-            fig.savefig(name, dpi='figure')
+            fig.savefig(name, dpi='figure', bbox_inches='tight')
             # else:
             #     fig.show()
 
