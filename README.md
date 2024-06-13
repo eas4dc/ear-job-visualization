@@ -15,24 +15,23 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 - Generate static images showing runtime metrics of your job monitored by EARL.
 - Generate Paraver traces to visualize runtime metrics within Paraver tool or any other tool of the BSC's Tools teams.
-- **(New)** Generate a LaTeX project with the most relevant information about the job to be analyzed.
+- **(Beta)** Generate a LaTeX project with the most relevant information about the job to be analyzed.
     - Job global summary.
     - Job phase classification.
     - Job runtime metrics.
 
 ## Requirements
 
-- Python 3.8
-- Numpy
-- Matplotlib < 3.5
-- Proplot
-- Pandas
+- pandas
+- matplotlib
+- jinja2
+- importlib_resources
 
 By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.
 > Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
 
 If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
-You can also provide directly input files if eacct is unable, [read below](https://github.com/eas4dc/ear-job-analytics/blob/main/README.md#providing-files-instead-of-using-internally-eacct). 
+You can also provide directly input files if eacct is unable, [read below](https://github.com/eas4dc/ear-job-analytics/blob/main/README.md#providing-files-instead-of-using-internally-eacct).
 
 ## Installation
 
@@ -45,6 +44,8 @@ pip install build setuptools
 python -m build
 pip install .
 ```
+
+Tool's developers may want to use `pip install -e .` to install the package in editable mode, so there is no need to reinstall every time you want to test a new feature.
 
 Then, you can type `ear-job-analytics` and you should see the following:
 
@@ -60,10 +61,28 @@ ear-job-analytics: error: the following arguments are required: --format, -j/--j
 If you had some trouble during the build and/or installation process, contact with oriol.vidal@eas4dc.com.
 We are trying provide a more easy way to install the package.
 
+### Make the package usable by other users
+
+You can install the tool to be available to other users in multiple ways, and maybe you know a better approach for doing so or which fits much better to your use case, but here there is explained a way we found useful to fit on systems where we put this tool in production.
+
+1 - Prepend the path to `site-packages` directory where you have installed the tool to `PYTHONPATH`.
+2 - Prepend the path to `bin` directory where you have installed the tool to `PATH`.
+
+For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `virtualenv/install/dir/lib/python<version>/site-packages` to `PYTHONPATH` variable and `virtualenv/install/dir/bin` to `PATH`.
+
+```
+# An example module file for Lmod
+
+whatis("Enables the usage of ear-job-analytics, a tool for visualizing performance metrics collected by EAR.")
+
+prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-packages")
+prepend_path("PATH", "virtualenv/install/dir/bin")
+```
+
 ## Usage
 
 It is mandatory to specify the output format (i.e., `--format`) you want produce.
-Choices for this option are either *runtime*, *ear2prv* or *job-summary*, and each one enables each of the tool's features.
+Choices for this option are either *runtime*, *ear2prv* or *job-summary (beta)*, and each one enables each of the tool's features.
 Read below for a detailed description of each one.
 
 In addition, you must specify the Job (i.e., `--job-id`) and Step (i.e., `--step-id`) IDs of the job being analyzed as features currently only support working with data corresponding with one Job-Step.
