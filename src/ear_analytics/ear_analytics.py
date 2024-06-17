@@ -1272,7 +1272,7 @@ def build_parser():
                             and visualize EAR job data.''',
                             formatter_class=formatter,
                             epilog='Contact: support@eas4dc.com')
-    parser.add_argument('--version', action='version', version='%(prog)s 4.2')
+    parser.add_argument('--version', action='version', version='%(prog)s 5.0')
 
     parser.add_argument('--format', required=True,
                         choices=['runtime', 'ear2prv', 'summary'],
