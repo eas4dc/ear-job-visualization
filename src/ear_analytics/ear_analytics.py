@@ -1,13 +1,12 @@
 """ High level support for read and visualize
     information given by EARL. """
 
-from sys import exit
+import sys
 from argparse import HelpFormatter, ArgumentParser
 from os import mkdir, path, system
 from subprocess import run, PIPE, STDOUT, CalledProcessError
 from time import strftime, localtime
 import re
-import json
 
 import numpy as np
 
@@ -25,8 +24,13 @@ from importlib_resources import files
 from itertools import chain
 
 from .io_api import read_data
-from .metrics import *
-from .utils import filter_df, read_job_data_config, read_loop_data_config, function_compose
+
+from .metrics import (metric_regex,
+                      read_metrics_configuration,
+                      get_plottable_metrics)
+
+from .utils import (filter_df, read_job_data_config, read_loop_data_config,
+                    function_compose)
 
 from . import ear_data as edata
 
@@ -37,7 +41,7 @@ from .phases import (read_phases_configuration,
 from .job_summary import (job_cpu_summary_df,
                           job_summary_to_tex_tabular,
                           job_gpu_summary,
-                          job_gpu_summary_to_tex_tabular)
+                          )
 
 from .events import read_events_configuration
 
@@ -67,7 +71,9 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
         print('Getting main file from template...')
 
         main_file_path = path.join(job_id, 'main.tex')
-        main_file_template = files('ear_analytics').joinpath('templates/main.tex.template')
+
+        main_file_template = (files('ear_analytics')
+                              .joinpath('templates/main.tex.template'))
 
         cmd = ' '.join(['cp', str(main_file_template), main_file_path])
 
@@ -114,9 +120,12 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
             print('Getting job GPU summary file from template...')
 
-            gpu_sum_file_template = files('ear_analytics').joinpath('templates/text/job_gpu_summary.tex')
+            templ_gpu = 'templates/text/job_gpu_summary.tex'
+            gpu_sum_file_template = files('ear_analytics').joinpath(templ_gpu)
 
-            cmd = ' '.join(['cp', str(gpu_sum_file_template), gpu_sum_file_path])
+            cmd = ' '.join(['cp',
+                            str(gpu_sum_file_template),
+                            gpu_sum_file_path])
 
             run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
 
@@ -189,9 +198,13 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
         try:
             print('Getting job GPU agg power file from template...')
 
-            gpu_aggpwr_file_template = files('ear_analytics').joinpath('templates/text/agg_gpupwr.tex')
+            agg_gpu_templ = 'templates/text/agg_gpupwr.tex'
+            gpu_aggpwr_file_template = (files('ear_analytics')
+                                        .joinpath(agg_gpu_templ))
 
-            cmd = ' '.join(['cp', str(gpu_aggpwr_file_template), gpu_aggpwr_file_path])
+            cmd = ' '.join(['cp',
+                            str(gpu_aggpwr_file_template),
+                            gpu_aggpwr_file_path])
 
             run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
 
@@ -204,9 +217,8 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
             df_agg_gpupwr = (df_loops
                              .assign(
-                                 tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_re)
-                                                         .sum(axis=1)
-                                                        )
+                                tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_re)
+                                                        .sum(axis=1))
                                  )
                              )
             agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
@@ -274,7 +286,8 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                     fig_title='DC node power (W)')
 
 
-def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, norm=None, fig_title='',
+def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
+                                 norm=None, fig_title='',
                                  vertical_legend=False, granularity='node'):
     """
     Generates the timeline gradient.
@@ -292,10 +305,11 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, norm=
         m_data = edata.metric_agg_timeseries(df, metric_filter)
 
     m_data.index = to_datetime(m_data.index, unit='s')
-    
+
     # print(app_start_time, to_datetime(app_start_time, unit='s'))
-    new_idx = date_range(start=to_datetime(app_start_time, unit='s'),
-                         end=to_datetime(app_end_time, unit='s'), freq='1s').union(m_data.index)
+    new_idx = (date_range(start=to_datetime(app_start_time, unit='s'),
+                          end=to_datetime(app_end_time, unit='s'), freq='1s')
+               .union(m_data.index))
 
     m_data = m_data.reindex(new_idx).bfill()
     print(m_data)
@@ -436,9 +450,6 @@ def metric_timeline(df, metric, fig_fn, fig_title='', **kwargs):
     fig.savefig(fig_fn)
 
 
-# def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn, rel_range=False, save=True,
-#             title=None, job_id=None, step_id=None, output=None,
-#             horizontal_legend=False):
 def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
             rel_range=False, title=None, job_id=None, step_id=None,
             output=None, horizontal_legend=False):
@@ -457,14 +468,19 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
               .pipe(edata.df_gpu_node_metrics, config_fn)
               )
         df_job = (read_data(out_jobs_fn, sep=';')
-                  .pipe(filter_df, id=job_id, step_id=step_id))
+                  .pipe(filter_df, JOBID=job_id, STEPID=step_id,
+                        id=job_id, step_id=step_id))
     except FileNotFoundError as e:
         print(e)
         return
     else:
         # We need the application start time
-        app_start_time = df_job.START_TIME.to_numpy()[0]
-        app_end_time = df_job.END_TIME.to_numpy()[0]
+        print(df_job)
+        app_start_time = df_job.START_TIME.min()
+        app_end_time = df_job.END_TIME.max()
+
+        print(f'Job start time: {app_start_time}\n'
+              f'Job end time: {app_end_time}')
 
         for metric in req_metrics:
             # Get a valid EAR column name
@@ -493,8 +509,9 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
 
             vertical_legend = not horizontal_legend
 
-            fig = generate_metric_timeline_fig(df, app_start_time, app_end_time, metric_name, norm=norm,
-                                               fig_title=fig_title,
+            fig = generate_metric_timeline_fig(df, app_start_time,
+                                               app_end_time, metric_name,
+                                               norm=norm, fig_title=fig_title,
                                                vertical_legend=vertical_legend)
 
             # if save:
@@ -520,10 +537,9 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
             #     fig.show()
 
 
-def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events_config,
-            events_data_fn=None, job_id=None, step_id=None, output_fn=None,
-            events_config_fn=None):
-
+def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
+            events_config, events_data_fn=None, job_id=None, step_id=None,
+            output_fn=None, events_config_fn=None):
 
     def filter_df_columns(df, cols_config):
         """
@@ -532,7 +548,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         regex = '|'.join(cols_config.keys())
         return df.filter(regex=regex)
 
-
     def set_df_types(df, cols_config):
         """
         Returns df with types set by cols_config
@@ -540,12 +555,11 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         ret_df = DataFrame(index=df.index)
         dfs = [(df
                 .filter(regex=regex)
-                .pipe(lambda df: df.astype(cols_config[regex]) if not df.empty else df)
-                )
-                for regex in cols_config.keys()]
+                .pipe(lambda df: df.astype(cols_config[regex])
+                      if not df.empty else df)
+                ) for regex in cols_config.keys()]
 
         return ret_df.join(dfs)
-
 
     def insert_initial_values(df_loops, df_job):
         """
@@ -554,7 +568,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         got from start_time of the corresponding job, step in df_job.
         """
 
-        group_by_task = df_loops.groupby(['JOBID', 'STEPID', 'APPID', 'NODENAME']).groups
+        task_fields = ['JOBID', 'STEPID', 'APPID', 'NODENAME']
+        group_by_task = df_loops.groupby(task_fields).groups
 
         jobs = []
         steps = []
@@ -563,7 +578,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         times = []
         for j, s, a, n in group_by_task:
 
-            task_start_time = df_job.loc[(df_job['JOBID'] == j) & (df_job['STEPID'] == s) & (df_job['APPID'] == a)]['START_TIME']
+            task_start_time = df_job.loc[(df_job['JOBID'] == j) &
+                                         (df_job['STEPID'] == s) &
+                                         (df_job['APPID'] == a)]['START_TIME']
 
             if (not task_start_time.empty):
                 jobs += [j]
@@ -572,12 +589,18 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
                 nodes += [n]
                 times += [task_start_time.iat[0]]  # There is a unique element
             else:
-                print(f"Warning! Job data hasn't information about job {j} step {s} app {a}. This job-step-app won't be on the output trace.")
-        
-        df_start_time = DataFrame({'JOBID': jobs, 'STEPID': steps, 'APPID': apps, 'NODENAME': nodes, 'TIMESTAMP': times}, columns=df_loops.columns).fillna(0)
+                print(f"Warning! Job data hasn't information about job {j} "
+                      f"step {s} app {a}. This job-step-app won't be on the "
+                      "output trace.")
+
+        df_start_time = (DataFrame({'JOBID': jobs, 'STEPID': steps,
+                                    'APPID': apps, 'NODENAME': nodes,
+                                    'TIMESTAMP': times},
+                                   columns=df_loops.columns)
+                         .fillna(0))
 
         return concat([df_loops, df_start_time], ignore_index=True)
-        
+
         # start_time column is also changed to TIMESTAMP
         df_job_with_nodes = (df_loops
                              .merge(df_job).loc[:, ['JOBID', 'STEPID', 'NODENAME', 'start_time']]
@@ -586,7 +609,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         # df_job with node information and TIMESTAMP can be merged with loops
         return df_loops.merge(df_job_with_nodes, how='outer').fillna(0)
 
-
     def multiply_floats_by_1000000(df):
         df_floats = (df.select_dtypes(include=['Float64'])
                      .apply(lambda x: x*1000000)
@@ -594,10 +616,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         df_non_float = df.select_dtypes(exclude=['Float64'])
         return df_floats.join(df_non_float)
 
-
     def insert_jobdata(df_loops, df_job):
-        return df_loops.merge(df_job[['JOBID', 'STEPID', 'APPID', 'JOBNAME', 'START_TIME', 'END_TIME']])
-
+        return df_loops.merge(df_job[['JOBID', 'STEPID', 'APPID',
+                                      'JOBNAME', 'START_TIME', 'END_TIME']])
 
     def print_df(df):
         """
@@ -605,7 +626,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
         """
         print(df)
         return df
-
 
     # Read the Job data
 
@@ -615,7 +635,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config, events
               .pipe(filter_df_columns, job_data_config)
               .pipe(set_df_types, job_data_config)
               )
-    
+
     # Read the Loop data
     df_loops = (read_data(loop_data_fn, sep=';')
                 .pipe(filter_df, JOBID=job_id, STEPID=step_id)

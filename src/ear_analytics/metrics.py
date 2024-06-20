@@ -22,4 +22,5 @@ def get_plottable_metrics(metrics_conf):
     """
     Filters just those metrics that can be plotted.
     """
-    return {k : v for (k, v) in metrics_conf.items() if k not in ['job_step', 'node_count', 'energy', 'cpu_flops']}
+    return {k: v for (k, v) in metrics_conf.items()
+            if k not in ['job_step', 'node_count', 'energy', 'cpu_flops']}
