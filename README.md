@@ -1,7 +1,7 @@
 # ear-job-analytics
 
 A tool to automatically read and visualise data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) software.
-**ear-analytics** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
+**ear-analytics** is a cli program written in Python which lets you plot the EAR data ~given by some of its commands or~ by using some report plug-in offered by the EAR Library (EARL).
 The main visualisation target is to show runtime metrics collected by EARL in a timeline graph.
 
 By now this tool supports two kind of output formats:
@@ -15,88 +15,152 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 - Generate static images showing runtime metrics of your job monitored by EARL.
 - Generate Paraver traces to visualize runtime metrics within Paraver tool or any other tool of the BSC's Tools teams.
-- **(New)** Generate a LaTeX project with the most relevant information about the job to be analyzed.
+- **(Beta)** Generate a LaTeX project with the most relevant information about the job to be analyzed.
     - Job global summary.
     - Job phase classification.
     - Job runtime metrics.
 
 ## Requirements
 
-- Python 3.8
-- Numpy
-- Matplotlib < 3.5
-- Proplot
-- Pandas
+- pandas
+- matplotlib
+- jinja2
+- importlib_resources
 
-By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.
-> Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
+~By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.~
+> ~Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.~
 
-If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
-You can also provide directly input files if eacct is unable, [read below](https://github.com/eas4dc/ear-job-analytics/blob/main/README.md#providing-files-instead-of-using-internally-eacct). 
+~If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
+You can also provide directly input files if eacct is unable, [read below](https://github.com/eas4dc/ear-job-analytics/blob/main/README.md#providing-files-instead-of-using-internally-eacct).~
 
 ## Installation
 
 This repository contains all recipes to build and install the package.
 You need **build** and **setuptools** packages to properly build and install this one.
 
-```
+```bash
 pip install -U pip
 pip install build setuptools
 python -m build
 pip install .
 ```
 
+Tool's developers may want to use `pip install -e .` to install the package in editable mode, so there is no need to reinstall every time you want to test a new feature.
+
 Then, you can type `ear-job-analytics` and you should see the following:
 
 ```
-usage: ear-job-analytics [-h] [--version] --format {runtime,ear2prv,summary}
-                         [--input-file INPUT_FILE] -j JOB_ID -s STEP_ID
-                         [--save | --show] [-t TITLE] [-r] [-l]
-                         [-m metric [metric ...]] [-e] [-o OUTPUT] [-k]
-                         [-c CONFIG_FILE]
-ear-job-analytics: error: the following arguments are required: --format, -j/--job-id, -s/--step-id
+usage: ear-job-analytics [-h] [--version] [-c CONFIG_FILE]
+                         (--format {runtime,ear2prv,summary} | --print-config | --avail-metrics)
+                         [--input-file INPUT_FILE] [-j JOB_ID] [-s STEP_ID]
+                         [-o OUTPUT] [-k] [-t TITLE] [-r]
+                         [-m metric [metric ...]]
+ear-job-analytics: error: one of the arguments --format --print-config --avail-metrics is required
 ```
 
-If you had some trouble during the build and/or installation process, contact with oriol.vidal@eas4dc.com.
+If you had some trouble during the build and/or installation process, contact to support@eas4dc.com.
 We are trying provide a more easy way to install the package.
+
+### Make the package usable by other users
+
+You can install the tool to be available to other users in multiple ways, and maybe you know a better approach for doing so or which fits much better to your use case, but here there is explained a way we found useful to fit on systems where we put this tool in production.
+
+1 - Prepend the path to `site-packages` directory where you have installed the tool to `PYTHONPATH`.
+2 - Prepend the path to `bin` directory where you have installed the tool to `PATH`.
+
+For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `virtualenv/install/dir/lib/python<version>/site-packages` to `PYTHONPATH` variable and `virtualenv/install/dir/bin` to `PATH`.
+
+```lua
+# An example module file for Lmod
+
+whatis("Enables the usage of ear-job-analytics, a tool for visualizing performance metrics collected by EAR.")
+
+prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-packages")
+prepend_path("PATH", "virtualenv/install/dir/bin")
+```
 
 ## Usage
 
-It is mandatory to specify the output format (i.e., `--format`) you want produce.
-Choices for this option are either *runtime*, *ear2prv* or *job-summary*, and each one enables each of the tool's features.
-Read below for a detailed description of each one.
+You must choose one of the three main required options.
+The one you may use most of times is `--format`, but the order followed in this document is useful for new users to understand how the tool works.
 
-In addition, you must specify the Job (i.e., `--job-id`) and Step (i.e., `--step-id`) IDs of the job being analyzed as features currently only support working with data corresponding with one Job-Step.
-These required options ensures the tool to filter the input data by Job and Step IDs, respectively, to avoid possible errors on the output.
-So, the minimum shape of an invokation is:
+### `--print-config`
 
+Pretty prints the [configuration](Configuration) being used by the tool.
+You can take the printed configuration as an example for making yours and use it later through `--config-file` option.
+The usage of this flag is very simple:
+
+```bash
+ear-job-analytics --print-config
 ```
-$> ear-job-analytics --format [runtime|ear2prv|summary] --job-id <JobID> --step-id <StepID>
+
+### `--avail-metrics`
+
+Shows metrics names supported by tool.
+These supported metrics are taken from the configuration file, so you can view the default supported metrics with:
+
+```bash
+ear-job-analytics --avail-metrics
 ```
 
-The *runtime* option is the one used to generate static images (which you can modify at invokation time), while *ear2prv* refers the tool's interface to output data following the Paraver Trace Format.
+You can also check you own configuration file:
+
+```bash
+ear-job-analytics --avail-metrics -c my_config.json
+```
+
+### `--format`
+
+This option is in fact used to request for plotting (or converting) data.
+
+Choices for this option are either *runtime*, *ear2prv* ~or *job-summary (beta)*~, and each one enables each of the tool's features.
+Read below sections for a detailed description of each one.
+
+The *runtime* option is the one used to generate static images, while *ear2prv* refers the tool's interface to output data following the Paraver Trace Format.
 Finally, *job-summary* generates an overview analysis of the most relevant information of the job.
 
-> _ear2prv_ format is not in production yet.
+> _job-summary_ format is not in production yet.
 
-### Providing files instead of using internally eacct
+You must use the `--input-file` option to specify where the tool will find the data.
+You need two files:
 
-If you know which *eacct* invokations are required to visualise the data, you can use the option *--input-file* to specify where the tool will find the data to be filtered by the two required job-related options (e.g., *--job-id*, *--step-id*).
+- Loop csv file: EAR loop signature CSV file obtained by using `--ear-user-db` flag when launching an application. Normally named `<app name>.<node name>.time.loops.csv`.
+- Job csv file: EAR application global signatures obtained by using `--ear-user-db` flag (both files are generated by setting the flag just once). Normally named `<app name>.<node name>.time.csv`.
+
+**You must rename the job csv file** in order to get the tool working. Set the same name as loop csv file and prepend the string `out_jobs.`:
+
+```bash
+mv <app name>.<node name>.time.csv out_jobs.<app name>.<node name>.time.loops.csv
+```
+
+Put both files in the same path, and pass the original loop csv file name to the tool (i.e., `--input-file <app name>.<node name>.time.loops.csv`).
+
+Finally, you must specify the Job ID (i.e., `--job-id`) of the job being analyzed as features currently only support working with data corresponding with one Job.
+This required option ensures the tool to filter the input data by Job ID to avoid possible errors on the output.
+So, the minimum shape of an invokation is:
+
+```bash
+ear-job-analytics --format [runtime|ear2prv|summary] --input-file <loops csv file> --job-id <JobID>
+```
+
+### ~Providing files instead of using internally eacct~
+
+~If you know which *eacct* invokations are required to visualise the data, you can use the option *--input-file* to specify where the tool will find the data to be filtered by the two required job-related options (e.g., *--job-id*, *--step-id*).
 This option is useful when you already have data for multiple jobs and/or steps together and you want to work on it in several ways because naturally it's more fast to work directly on a file than invoking a command to make a query to a Database, storing the output on a file, and then read such file.
-This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.
+This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.~
 
-The way how the value of this option is handled depends on which functionality (e.g., *format*) you are working on, and which kind of data you want to produce/visualise.
-If **runtime** format option is used, the *--input-file* option can be a single filename (which can be given with its relative path) wich contains EAR loop data.
+~The way how the value of this option is handled depends on which functionality (e.g., *format*) you are working on, and which kind of data you want to produce/visualise.
+If **runtime** format option is used, the *--input-file* option can be a single filename (which can be given with its relative path) wich contains EAR loop data.~
 ~~If a directory name is given, the tool will read all files inside it (another reason why it is required to specify the Job and Step IDs).~~
 
-> If you started working by using *eacct* command internally, all required files are stored temporally while the tool is doing its work.
-> If you want to reuse such files later you can pass the option `--keep-csv` to prevent files been removed.
-> Then, you can provide those files to get different output.
+> ~If you started working by using *eacct* command internally, all required files are stored temporally while the tool is doing its work.~
+> ~If you want to reuse such files later you can pass the option `--keep-csv` to prevent files been removed.~
+> ~Then, you can provide those files to get different output.~
 
 ### *runtime* format
 
 Generate a heatmap-based graph for each metric specified by `--metrics` argument (i.e., space separated list of metric names).
-Note that the accepted metrics by your **ear-job-analytics** installation are specified in the [configuration](Configuration) file.
+Note that the accepted metrics by your **ear-job-analytics** installation are specified in the [configuration](Configuration) file and you can request the list trough `--avail-metrics` flag.
 
 The resulting figure (for each metric specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric during application execution.
 All nodes visualised share the same timeline, which makes this command useful to check the application behaviour over all of them.
