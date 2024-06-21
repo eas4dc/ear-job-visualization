@@ -22,7 +22,7 @@ from importlib_resources import files
 
 from itertools import chain
 
-from .io_api import read_data
+from .io_api import read_data, print_configuration
 
 from .metrics import (metric_regex, metric_step, read_metrics_configuration,
                       get_plottable_metrics)
@@ -298,8 +298,7 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
 def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
                                  step, v_min=None, v_max=None, fig_title='',
-                                 vertical_legend=False, granularity='node',
-                                 metric_display_name=''):
+                                 granularity='node', metric_display_name=''):
     """
     Generates the timeline gradient.
 
@@ -341,6 +340,7 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
                             )
     fig.get_layout_engine().set(h_pad=0, hspace=0)
 
+    print('Setting title: {fig_title}')
     axs[0, 0].set_title(fig_title)
 
     # Normalize values
@@ -435,8 +435,8 @@ def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
 
 
 def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
-            rel_range=False, title=None, job_id=None, step_id=None,
-            output=None, horizontal_legend=False):
+            rel_range=True, title=None, job_id=None, step_id=None,
+            output=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
@@ -462,9 +462,6 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
         app_start_time = df_job.START_TIME.min()
         app_end_time = df_job.END_TIME.max()
 
-        # print(f'Job start time: {app_start_time}\n'
-        #       f'Job end time: {app_end_time}')
-
         for metric in req_metrics:
             # Get a valid EAR column name
             metric_config = avail_metrics[metric]
@@ -478,7 +475,7 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
             v_max = None
             if not rel_range:
                 metric_range = metric_config['range']
-                print(f"Metric range: {metric_range}")
+                print(f"Configured metric range: {metric_range}")
                 v_min = metric_range[0]
                 v_max = metric_range[1]
 
@@ -492,13 +489,10 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
                     if step_id is not None:
                         fig_title = '-'.join([fig_title, str(step_id)])
 
-            vertical_legend = not horizontal_legend
-
             fig = generate_metric_timeline_fig(df, app_start_time,
                                                app_end_time, metric_name, step,
                                                v_min=v_min, v_max=v_max,
                                                fig_title=fig_title,
-                                               vertical_legend=vertical_legend,
                                                metric_display_name=disply_name)
 
             # if save:
@@ -1154,14 +1148,35 @@ def parser_action(args):
     Parses the Namespace `args` and decides which action to do.
     """
 
-    csv_generated = False
-
+    # Get the (possible) config file provided by the user
     if args.config_file:
         config_file_path = args.config_file
     else:
         config_file_path = files('ear_analytics').joinpath('config.json')
 
+    # Print configuration file
+    if args.print_config == True:
+        print_configuration(config_file_path)
+        return
+
+    print(f'Using {config_file_path} as configuration file...')
+
+    # Show available metrics
+    if args.avail_metrics == True:
+
+        comp = function_compose(get_plottable_metrics,
+                                read_metrics_configuration)
+        config_metrics = comp(config_file_path)
+        print(f'Available metrics: {" ".join(config_metrics)}.')
+        return
+
+    csv_generated = False
+
     if args.input_file is None:
+
+        print('This version still requires an input file.'
+              'Run an applicatin with --ear-user-db flag.')
+        return
 
         # Action performing eacct command and storing csv files
 
@@ -1170,6 +1185,10 @@ def parser_action(args):
         args.input_file = input_file
 
         csv_generated = True
+
+    if args.job_id is None:
+        print('A Job ID is required for filtering data.')
+        return
 
     if args.format == "runtime" or args.format == "ear2prv":
         head_path, tail_path = path.split(args.input_file)
@@ -1180,9 +1199,8 @@ def parser_action(args):
 
         runtime(args.input_file, out_jobs_path,
                 read_metrics_configuration(config_file_path),
-                args.metrics, config_file_path, args.relative_range,
-                args.title, args.job_id, args.step_id, args.output,
-                args.horizontal_legend)
+                args.metrics, config_file_path, args.manual_range,
+                args.title, args.job_id, args.step_id, args.output)
 
     elif args.format == "ear2prv":
         events_data_path = None
@@ -1282,87 +1300,88 @@ def build_parser():
                             epilog='Contact: support@eas4dc.com')
     parser.add_argument('--version', action='version', version='%(prog)s 5.0')
 
-    parser.add_argument('--format', required=True,
-                        choices=['runtime', 'ear2prv', 'summary'],
-                        help='''Build results according to chosen format:
-                        runtime (static images) or ear2prv (using paraver
-                        tool) (ear2prv UNSTABLE). summary option builds
-                        a small report about the job metrics.''')
+    main_group = parser.add_argument_group('Main options',
+                                           description='''The main option flags
+                                           required by the tool.''') 
 
-    parser.add_argument('--input-file', required=True,
+    main_group.add_argument('-c', '--config-file',
+                        help='Specify a custom configuration file.')
+
+    # format and print-config options are mutually exclusive
+    main_excl_grp = main_group.add_mutually_exclusive_group(required=True)
+
+    # Specify 
+    main_excl_grp.add_argument('--format', choices=['runtime', 'ear2prv', 'summary'],
+                               help='''Build results according to chosen format:
+                               `runtime` (static images) or `ear2prv` (using paraver
+                               tool). `summary` (Beta) option builds a
+                               small report about the job metrics.''')
+
+    main_excl_grp.add_argument('--print-config', action='store_true',
+                               help='''Prints the used configuration file.''')
+
+    main_excl_grp.add_argument('--avail-metrics', action='store_true',
+                               help='''Prints the available metrics provided by
+                               the configuration file.''')
+
+    format_grp = parser.add_argument_group('Format common options',
+                                           description='''Used when requesting
+                                           any of "--format" choices.''')
+
+    format_grp.add_argument('--input-file',
                         help=('''Specifies the input file(s)
-                              name(s) to read data from. It can be a path.'''))
+                              name(s) to read data from. It can be a path.
+                              (Required).'''))
 
-    parser.add_argument('-j', '--job-id', type=int, required=True,
-                        help='Filter the data by the Job ID.')
-    parser.add_argument('-s', '--step-id', type=int, required=False,
-                        help='Filter the data by the Step ID.')
+    format_grp.add_argument('-j', '--job-id', type=int,
+                            help='Filter the data by the Job ID (Required).')
+
+    format_grp.add_argument('-s', '--step-id', type=int,
+                            help='Filter the data by the Step ID.')
+
+    format_grp.add_argument('-o', '--output',
+                            help="""Sets the output file name.
+                            If a path to an existing directory is given,
+                            `runtime` option saves files with the form
+                            `runtime_<metric>.pdf` (for each requested metric) will be
+                            on the given directory. Otherwise,
+                            runtime_<metric>-<output> is stored for each resulting
+                            figure.
+                            For ear2prv format, specify the base Paraver trace
+                            files base name.""")
+
+    format_grp.add_argument('-k', '--keep-csv', action='store_true',
+                            help='Don\'t remove temporary csv files.')
 
     # ONLY for runtime format
-    runtime_group_args = parser.add_argument_group('`runtime` format options')
+    runtime_grp = parser.add_argument_group('`runtime` format options',
+                                            description='''Used when
+                                            requesting "--format runtime".''')
 
-    """
-    group = runtime_group_args.add_mutually_exclusive_group()
-    group.add_argument('--save', action='store_true',
-                       help='Activate the flag to store resulting figures.')
-    group.add_argument('--show', action='store_true',
-                       help='Show the resulting figure (default).')
-    """
+    runtime_grp.add_argument('-t', '--title',
+                             help="""Set the resulting figure title.
+                             The resulting title will be
+                             "<title>: <metric>" for each requested
+                             metric.""")
 
-    runtime_group_args.add_argument('-t', '--title',
-                                    help="""Set the resulting figure title.
-                                    Only valid for `runtime` format option.
-                                    The resulting title will be
-                                    "<title>: <metric>" for each requested
-                                    metric.""")
-
-    runtime_group_args.add_argument('-r', '--relative-range',
-                                    action='store_true',
-                                    help='Use the relative range of a metric '
-                                    'over the trace data to build the '
-                                    'gradient, instead of the manually '
-                                    'specified at config.ini file.')
-
-    runtime_group_args.add_argument('-l', '--horizontal-legend',
-                                    action='store_true',
-                                    help='Display the legend horizontally. '
-                                    'This option is useful when your trace has'
-                                    ' a low number of nodes.')
-
-    config = files('ear_analytics').joinpath('config.json')
-    config_metrics = get_plottable_metrics(read_metrics_configuration(config))
+    runtime_grp.add_argument('-r', '--manual-range',
+                             action='store_false',
+                             help='''Uses the range of values specified in the
+                             configuration file to build the final trace
+                             colormap insted of building it based on the
+                             range of the data source's metric.''')
 
     metrics_help_str = ('Space separated list of case sensitive'
-                        ' metrics names to visualize. Allowed values are '
-                        f'{", ".join(config_metrics)}'
-                        )
-    runtime_group_args.add_argument('-m', '--metrics',
-                                    help=metrics_help_str,
-                                    metavar='metric', nargs='+',
-                                    choices=config_metrics.keys())
+                        ' metrics names to visualize. Allowed values can '
+                        'be viewed with `ear-job-analytics --avail-metrics`.')
+    runtime_grp.add_argument('-m', '--metrics', help=metrics_help_str,
+                             metavar='metric', nargs='+')
 
-    ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
+    # ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
 
-    events_help_str = 'Include EAR events in the trace fille.'
-    ear2prv_group_args.add_argument('-e', '--events', action='store_true',
-                                    help=events_help_str)
-
-    parser.add_argument('-o', '--output',
-                        help="""Sets the output file name.
-                        If a path to an existing directory is given,
-                        `runtime` option saves files with the form
-                        `runtime_<metric>.pdf` (for each requested metric) will be
-                        on the given directory. Otherwise,
-                        runtime_<metric>-<output> is stored for each resulting
-                        figure.
-                        For ear2prv format, specify the base Paraver trace
-                        files base name.""")
-
-    parser.add_argument('-k', '--keep-csv', action='store_true',
-                        help='Don\'t remove temporary csv files.')
-
-    parser.add_argument('-c', '--config-file',
-                        help='Specify a custom configuration file.')
+    # events_help_str = 'Include EAR events in the trace fille.'
+    # ear2prv_group_args.add_argument('-e', '--events', action='store_true',
+    #                                 help=events_help_str)
 
     return parser
 
@@ -1375,8 +1394,6 @@ def main():
     args = parser.parse_args()
 
     parser_action(args)
-
-    # return args
 
 
 if __name__ == '__main__':
