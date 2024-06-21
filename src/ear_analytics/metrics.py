@@ -18,6 +18,14 @@ def metric_regex(metric, metrics_conf):
     return metrics_conf[metric]['column_name']
 
 
+def metric_step(metric, metrics_conf):
+    """
+    This function returns the metric's step value to be used for value
+    discretisation when building a gradient timeline.
+    """
+    return metrics_conf[metric]['step']
+
+
 def get_plottable_metrics(metrics_conf):
     """
     Filters just those metrics that can be plotted.

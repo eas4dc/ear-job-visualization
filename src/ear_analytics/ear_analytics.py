@@ -15,9 +15,8 @@ from pylatex import Command
 
 from heapq import merge
 
-from matplotlib import cm
-from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 from importlib_resources import files
 
@@ -25,8 +24,7 @@ from itertools import chain
 
 from .io_api import read_data
 
-from .metrics import (metric_regex,
-                      read_metrics_configuration,
+from .metrics import (metric_regex, metric_step, read_metrics_configuration,
                       get_plottable_metrics)
 
 from .utils import (filter_df, read_job_data_config, read_loop_data_config,
@@ -170,21 +168,25 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
     # Aggregated power
     agg_metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
+                        metric_step('dc_power', metrics_conf),
                         path.join(timelines_dir, 'agg_dcpower'),
                         fig_title='Accumulated DC Node Power (W)')
 
     # Aggregated Mem. bandwidth
     agg_metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
+                        metric_step('gbs', metrics_conf),
                         path.join(timelines_dir, 'agg_gbs'),
                         fig_title='Accumulated memory bandwidth (GB/s)')
 
     # Aggregated GFlop/s
     agg_metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
+                        metric_step('gflops', metrics_conf),
                         path.join(timelines_dir, 'agg_gflops'),
                         fig_title='Accumulated CPU GFlop/s')
 
     # Aggregated I/O
     agg_metric_timeline(df_loops, metric_regex('io_mbs', metrics_conf),
+                        metric_step('io_mbs', metrics_conf),
                         path.join(timelines_dir, 'agg_iombs'),
                         fig_title='Accumulated I/O throughput (MB/s)')
 
@@ -222,13 +224,15 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                                  )
                              )
             agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
+                                metric_step('tot_gpu_pwr', metrics_conf),
                                 path.join(timelines_dir, 'agg_gpupower'),
                                 fig_title='Aggregated GPU Power (W)')
         # Per-node GPU util
         try:
             print('Getting job GPU util file from template...')
 
-            gpu_util_file_template = files('ear_analytics').joinpath('templates/text/gpu_util.tex')
+            gpu_util_file_template = (files('ear_analytics')
+                                      .joinpath('templates/text/gpu_util.tex'))
 
             cmd = ' '.join(['cp', str(gpu_util_file_template), gpu_util_file_path])
 
@@ -239,9 +243,10 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
                   err.returncode, f'({err.output})')
             return
         else:
-            norm = Normalize(vmin=0, vmax=100, clip=True)
+            norm = mpl.colors.Normalize(vmin=0, vmax=100, clip=True)
             metric_timeline(edata.filter_invalid_gpu_series(df_loops),
                             metric_regex('gpu_util', metrics_conf),
+                            metric_step('gpu_util', metrics_conf),
                             path.join(timelines_dir, 'per-node_gpuutil'),
                             norm=norm, fig_title='GPU utilization (%)')
     else:
@@ -262,33 +267,39 @@ def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
 
     # Per-node CPI
     metric_timeline(df_loops, metric_regex('cpi', metrics_conf),
+                    metric_step('cpi', metrics_conf),
                     path.join(timelines_dir, 'per-node_cpi'),
                     fig_title='Cycles per Instruction')
 
     # Per-node GBS
     metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
+                    metric_step('gbs', metrics_conf),
                     path.join(timelines_dir, 'per-node_gbs'),
                     fig_title='Memory bandwidth (GB/s)')
 
     # Per-node GFlop/s
     metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
+                    metric_step('gflops', metrics_conf),
                     path.join(timelines_dir, 'per-node_gflops'),
                     fig_title='CPU GFlop/s')
 
     # Per-node Avg. CPU freq.
     metric_timeline(df_loops, metric_regex('avg_cpufreq', metrics_conf),
+                    metric_step('avg_cpufreq', metrics_conf),
                     path.join(timelines_dir, 'per-node_avgcpufreq'),
                     fig_title='Avg. CPU frequency (kHz)')
 
     # Per-node DC Power
     metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
+                    metric_step('dc_power', metrics_conf),
                     path.join(timelines_dir, 'per-node_dcpower'),
                     fig_title='DC node power (W)')
 
 
 def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
-                                 norm=None, fig_title='',
-                                 vertical_legend=False, granularity='node'):
+                                 step, v_min=None, v_max=None, fig_title='',
+                                 vertical_legend=False, granularity='node',
+                                 metric_display_name=''):
     """
     Generates the timeline gradient.
 
@@ -297,7 +308,6 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
     """
 
     metric_filter = df.filter(regex=metric).columns
-    print(metric_filter)
 
     if granularity != 'app':
         m_data = edata.metric_timeseries_by_node(df, metric_filter)
@@ -306,16 +316,13 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
 
     m_data.index = to_datetime(m_data.index, unit='s')
 
-    # print(app_start_time, to_datetime(app_start_time, unit='s'))
     new_idx = (date_range(start=to_datetime(app_start_time, unit='s'),
                           end=to_datetime(app_end_time, unit='s'), freq='1s')
                .union(m_data.index))
 
     m_data = m_data.reindex(new_idx).bfill()
-    print(m_data)
 
     m_data_array = m_data.values.transpose()
-    print(m_data_array)
 
     if granularity == 'app':
         m_data_array = m_data_array.reshape(1, m_data_array.shape[0])
@@ -323,51 +330,37 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
     # Compute time deltas to be showed to
     # the end user instead of an absolute timestamp.
     time_deltas = [i - m_data.index[0] for i in m_data.index]
-    print(time_deltas, len(time_deltas))
+    # print(time_deltas, len(time_deltas))
 
     # Create the resulting figure for current metric
+    print("Creating the figure...")
 
-    print("Creating figure")
-    # fig = figure(sharey=False, refwidth='159.2mm', refaspect=30,
-    #              suptitle=fig_title, suptitle_kw={'size': 'large'})
-
-    if vertical_legend:
-        fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
-                                squeeze=False, gridspec_kw={'hspace': 0},
-                                layout='constrained'
-                                )
-        fig.set_figwidth(6.27)
-        # grid_sp = GridSpec(nrows=len(m_data_array), ncols=2,
-        #                    width_ratios=(0.95, 0.05), hspace=0)
-    else:
-        def metric_row(i):
-            """returns whether row i corresponds to a metric timeline."""
-            return i < len(m_data_array)
-
-        height_ratios = [0.8 / len(m_data_array)
-                         if metric_row(i) else 0.2
-                         for i in range(len(m_data_array) + 1)]
-
-        hspaces = [0 if metric_row(i + 1) else None
-                   for i in range(len(m_data_array))]
-
-        # grid_sp = GridSpec(nrows=len(m_data_array) + 1, ncols=1,
-        #                    hratios=height_ratios,
-        #                    hspace=hspaces)
-        fig, axs = plt.subplots(nrows=len(m_data_array) + 1, ncols=1,
-                                hratios=height_ratios, hspace=hspaces)
+    fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
+                            squeeze=False, gridspec_kw={'hspace': 0},
+                            layout='constrained'
+                            )
+    fig.get_layout_engine().set(h_pad=0, hspace=0)
 
     axs[0, 0].set_title(fig_title)
-    axs[0, 0].grid(axis='x', alpha=0.5)
-
-    # grid_sp = GridSpec(nrows=len(m_data_array), ncols=1, hspace=0)
 
     # Normalize values
 
-    if norm is None:  # Relative range
-        norm = Normalize(vmin=np.nanmin(m_data_array),
-                         vmax=np.nanmax(m_data_array), clip=True)
-        print(norm)
+    cmap = mpl.colormaps['viridis_r']
+    bounds = np.arange(v_min if v_min is not None else np.nanmin(m_data_array),
+                       v_max + step if v_max is not None
+                       else np.nanmax(m_data_array) + step,
+                       step)
+    if bounds.size > 16 or bounds.size < 5:
+        print(f'Warning! {bounds.size} discrete intervals generated.')
+
+        if bounds.size > 16:
+            print(f'Consider increasing the step (currently {step})'
+                  f' for {metric}.')
+        else:
+            print(f'Consider decreasing the step (currently {step})'
+                  f' for {metric}.')
+
+    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
 
     gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
                             r'UTIL_PERC|MEM_UTIL_PERC|'
@@ -386,10 +379,7 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
         else:
             ylabel_text = ''
 
-        if vertical_legend:
-            axes = axs[i, 0] # fig.add_subplot(grid_sp[i, 0])
-        else:
-            axes = axs[i] # fig.add_subplot(grid_sp[i])
+        axes = axs[i, 0]
 
         def format_fn(tick_val):
             """
@@ -398,40 +388,34 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
             """
             return time_deltas[tick_val].seconds
 
-        
-        # axes.format(xticklabels=format_fn, ylocator=[0.5],
-        #             yticklabels=[ylabel_text], ticklabelsize='small')
-        xticks = np.arange(len(m_data_array[0]), step=20)
-        xticklabels = map(format_fn, xticks)
-
-        axes.set_xticks(xticks, labels=xticklabels)
-        axes.minorticks_on()
+        axes.grid(axis='x', alpha=0.5)
 
         axes.set_yticks([0], labels=[ylabel_text])
         data = np.array(m_data_array[i], ndmin=2)
 
         # Generate the timeline gradient
-        axes.imshow(data, norm='linear', aspect=5, cmap='viridis_r',
-                    vmin=norm.vmin, vmax=norm.vmax)
+        axes.imshow(data, norm=norm, aspect='auto', cmap=cmap,
+                    interpolation='nearest')
 
-    if not vertical_legend:
-        col_bar_ax = fig.add_subplot(axs[-1], autoshare=False,
-                                     ticklabelsize='small')
-        # col_bar_ax = fig.add_subplot(grid_sp[-1], autoshare=False,
-        #                              ticklabelsize='small')
+        if i < len(m_data_array) - 1:
+            axes.tick_params(axis='x', which='both', bottom=False)
 
-        fig.colorbar(cm.ScalarMappable(
-            cmap='imola_r', norm=norm),
-            orientation="horizontal", loc='b', cax=col_bar_ax)
-    else:
-        # col_bar_ax = axs[:, 1] # fig.add_subplot(grid_sp[:, 1], ticklabelsize='small')
-        fig.colorbar(cm.ScalarMappable(norm=norm, cmap='viridis_r'), ax=axs,
-                     location='bottom', shrink=0.6, label=f'{metric}')
+    xticks = np.arange(len(m_data_array[0]), step=20)
+    xticklabels = map(format_fn, xticks)
+
+    axs[-1, 0].set_xticks(xticks, labels=xticklabels)
+    axs[-1, 0].minorticks_on()
+
+    # Create the figure colorbar
+
+    label = metric if metric_display_name == '' else metric_display_name
+    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
+                 ax=axs, location='bottom', label=label)
 
     return fig
 
 
-def agg_metric_timeline(df, metric, fig_fn, fig_title=''):
+def agg_metric_timeline(df, metric, step, fig_fn, fig_title=''):
     """
     Create and save a figure timeline from the DataFrame `df`, which contains
     EAR loop data, for metric/s that match the regular expression `metric`.
@@ -439,14 +423,14 @@ def agg_metric_timeline(df, metric, fig_fn, fig_title=''):
     involved nodes in EAR loop data.
     """
 
-    fig = generate_metric_timeline_fig(df, metric,
-                                       fig_title=fig_title, granularity='app')
+    fig = generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
+                                       granularity='app')
     fig.savefig(fig_fn)
 
 
-def metric_timeline(df, metric, fig_fn, fig_title='', **kwargs):
-    fig = generate_metric_timeline_fig(df, metric,
-                                       fig_title=fig_title, **kwargs)
+def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
+    fig = generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
+                                       **kwargs)
     fig.savefig(fig_fn)
 
 
@@ -475,27 +459,28 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
         return
     else:
         # We need the application start time
-        print(df_job)
         app_start_time = df_job.START_TIME.min()
         app_end_time = df_job.END_TIME.max()
 
-        print(f'Job start time: {app_start_time}\n'
-              f'Job end time: {app_end_time}')
+        # print(f'Job start time: {app_start_time}\n'
+        #       f'Job end time: {app_end_time}')
 
         for metric in req_metrics:
             # Get a valid EAR column name
-            # metric_name = avail_metrics.get_metric(metric).name
             metric_config = avail_metrics[metric]
+
             metric_name = metric_config['column_name']
+            disply_name = metric_config.get('display_name', metric_name)
+            step = metric_config['step']
 
             # Set the configured normalization if requested.
-            norm = None
+            v_min = None
+            v_max = None
             if not rel_range:
                 metric_range = metric_config['range']
                 print(f"Metric range: {metric_range}")
-
-                norm = Normalize(vmin=metric_range[0],
-                                 vmax=metric_range[1], clip=True)
+                v_min = metric_range[0]
+                v_max = metric_range[1]
 
             # TODO: Add the min/max value of the metric (relative range always)
             fig_title = metric
@@ -510,9 +495,11 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
             vertical_legend = not horizontal_legend
 
             fig = generate_metric_timeline_fig(df, app_start_time,
-                                               app_end_time, metric_name,
-                                               norm=norm, fig_title=fig_title,
-                                               vertical_legend=vertical_legend)
+                                               app_end_time, metric_name, step,
+                                               v_min=v_min, v_max=v_max,
+                                               fig_title=fig_title,
+                                               vertical_legend=vertical_legend,
+                                               metric_display_name=disply_name)
 
             # if save:
             name = f'runtime_{metric}'
@@ -835,7 +822,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                                     f'({app_job}.{app_step}.{app_appid})'
                                     f' {df_app.JOBNAME.unique()[0]}'])
 
-    task_lvl_names = ''.join([f'LEVEL TASK SIZE {total_task_cnt}', task_lvl_names])
+    task_lvl_names = ''.join([f'LEVEL TASK SIZE {total_task_cnt}',
+                              task_lvl_names])
 
     # The resulting Application List
     appl_list_str = ':'.join(appl_lists)
@@ -896,7 +884,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                      'MEM_FREQ_KHZ': 'gpu_mem_freq',
                      'UTIL_PERC': 'gpu_util',
                      'MEM_UTIL_PERC': 'gpu_mem_util',
-                     'GFLOPS' : 'gpu_gflops'
+                     'GFLOPS': 'gpu_gflops'
                      }
 
     body_list = []
@@ -940,15 +928,13 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
     event_typ_lst = [f'EVENT_TYPE\n0\t{metric_event_typ_map[metric]}'
                      f'\t{metric}\n' for metric in metric_event_typ_map]
 
-
     # States body and configuration
     df_states = (df_loops
-                       .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
-                       .assign(state_id=1,  # 1 -> Running
-                               START_TIME=lambda df: (df.START_TIME - df_job.START_TIME.min()) * 1000000,
-                               END_TIME=lambda df: (df.END_TIME -  df_job.START_TIME.min()) * 1000000)
-                       .reset_index()
-                       )
+                 .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
+                 .assign(state_id=1,  # 1 -> Running
+                         START_TIME=lambda df: (df.START_TIME - df_job.START_TIME.min()) * 1000000,
+                         END_TIME=lambda df: (df.END_TIME -  df_job.START_TIME.min()) * 1000000)
+                 .reset_index())
 
     smft = '1:0:{app_id}:{task_id}:1:{START_TIME}:{END_TIME}:{state_id}'.format
     states_body_list = (df_states
@@ -957,7 +943,8 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                         )
 
     # Start time and end time events
-    start_end_event_ids = {event : columns.get_loc(event) for event in ['START_TIME', 'END_TIME']}
+    start_end_event_ids = {event: columns.get_loc(event)
+                           for event in ['START_TIME', 'END_TIME']}
 
     df_start_end_time = (df_loops
                          .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
@@ -980,25 +967,27 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                              f'\t{event}\n' for event in start_end_event_ids]
     event_typ_lst += start_end_event_types
 
-
     def sort_by_record_type(trace_list):
         """
         Descending order
         """
-        return sorted(trace_list, key=lambda x: int(x.split(sep=':')[0]), reverse=True)
+        return sorted(trace_list, key=lambda x: int(x.split(sep=':')[0]),
+                      reverse=True)
 
     def sort_by_timestamp(trace_list):
         """
         Ascending order
         """
         return sorted(trace_list, key=lambda x: int(x.split(sep=':')[5]))
-    
-    # first we worder by record type as it is the second sorting criteria and we make use
-    # of sorted() stable property: https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
-    sort_by_type_and_time = function_compose(sort_by_timestamp, sort_by_record_type)
 
-    body_list_sorted = sort_by_type_and_time(chain(states_body_list, body_list, start_end_body_list))
+    # first we worder by record type as it is the second sorting criteria and
+    # we make use of sorted() stable property:
+    # https://docs.python.org/3/howto/sorting.html#sort-stability-and-complex-sorts
+    sort_by_type_and_time = function_compose(sort_by_timestamp,
+                                             sort_by_record_type)
 
+    body_list_sorted = sort_by_type_and_time(chain(states_body_list, body_list,
+                                                   start_end_body_list))
 
     # #### EAR events body and configuration
     if df_events is not None:
@@ -1189,12 +1178,11 @@ def parser_action(args):
 
     if args.format == "runtime":
 
-        # runtime(args.input_file, out_jobs_path, read_metrics_configuration(config_file_path),
-        #         args.metrics, config_file_path, args.relative_range, args.save, args.title,
-        #         args.job_id, args.step_id, args.output, args.horizontal_legend)
-        runtime(args.input_file, out_jobs_path, read_metrics_configuration(config_file_path),
-                args.metrics, config_file_path, args.relative_range, args.title,
-                args.job_id, args.step_id, args.output, args.horizontal_legend)
+        runtime(args.input_file, out_jobs_path,
+                read_metrics_configuration(config_file_path),
+                args.metrics, config_file_path, args.relative_range,
+                args.title, args.job_id, args.step_id, args.output,
+                args.horizontal_legend)
 
     elif args.format == "ear2prv":
         events_data_path = None
@@ -1204,7 +1192,8 @@ def parser_action(args):
                                       '.'.join(['events', tail_path])))
 
         # Call ear2prv format method
-        ear2prv(out_jobs_path, args.input_file, read_job_data_config(config_file_path),
+        ear2prv(out_jobs_path, args.input_file,
+                read_job_data_config(config_file_path),
                 read_loop_data_config(config_file_path),
                 read_events_configuration(config_file_path),
                 events_data_fn=events_data_path, job_id=args.job_id,
@@ -1246,7 +1235,6 @@ def parser_action(args):
                 except FileNotFoundError:
                     return
                 else:
-                    # config_file = files('ear_analytics').joinpath('config.json')
                     metrics_conf = read_metrics_configuration(config_file_path)
                     phases_conf = read_phases_configuration(config_file_path)
 
@@ -1301,9 +1289,9 @@ def build_parser():
                         tool) (ear2prv UNSTABLE). summary option builds
                         a small report about the job metrics.''')
 
-    parser.add_argument('--input-file', help=('''Specifies the input file(s)
-                                              name(s) to read data from.
-                                              It can be a path.'''))
+    parser.add_argument('--input-file', required=True,
+                        help=('''Specifies the input file(s)
+                              name(s) to read data from. It can be a path.'''))
 
     parser.add_argument('-j', '--job-id', type=int, required=True,
                         help='Filter the data by the Job ID.')
@@ -1388,8 +1376,8 @@ def main():
 
     parser_action(args)
 
-    return args
+    # return args
 
 
 if __name__ == '__main__':
-    args = main()
+    main()
