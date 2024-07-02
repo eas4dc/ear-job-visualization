@@ -336,11 +336,11 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
 
     fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
                             squeeze=False, gridspec_kw={'hspace': 0},
-                            layout='constrained'
+                            layout='constrained', figsize=(6.4, 1 + (6.4/15) * len(m_data_array))
                             )
     fig.get_layout_engine().set(h_pad=0, hspace=0)
 
-    print('Setting title: {fig_title}')
+    print(f'Setting title: {fig_title}')
     axs[0, 0].set_title(fig_title)
 
     # Normalize values
@@ -394,8 +394,9 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
         data = np.array(m_data_array[i], ndmin=2)
 
         # Generate the timeline gradient
-        axes.imshow(data, norm=norm, aspect='auto', cmap=cmap,
-                    interpolation='nearest')
+        axes.imshow(data, norm=norm, cmap=cmap,
+                    interpolation='nearest', aspect='auto')
+        # axes.set_box_aspect(1/30)
 
         if i < len(m_data_array) - 1:
             axes.tick_params(axis='x', which='both', bottom=False)
@@ -410,7 +411,7 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
 
     label = metric if metric_display_name == '' else metric_display_name
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
-                 ax=axs, location='bottom', label=label)
+                 ax=axs, location='bottom', label=label, format='%.2f')
 
     return fig
 
