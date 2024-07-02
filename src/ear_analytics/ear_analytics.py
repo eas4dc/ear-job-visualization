@@ -1180,7 +1180,7 @@ def parser_action(args):
 
         # Action performing eacct command and storing csv files
 
-        input_file = eacct(args.format, args.job_id, args.step_id, args.events)
+        input_file = eacct(args.format, args.job_id, args.step_id)
 
         args.input_file = input_file
 
@@ -1204,10 +1204,10 @@ def parser_action(args):
 
     elif args.format == "ear2prv":
         events_data_path = None
-        if args.events:
-            events_data_path = (path
-                                .join(head_path,
-                                      '.'.join(['events', tail_path])))
+        # if args.events:
+        #     events_data_path = (path
+        #                         .join(head_path,
+        #                               '.'.join(['events', tail_path])))
 
         # Call ear2prv format method
         ear2prv(out_jobs_path, args.input_file,
@@ -1263,9 +1263,9 @@ def parser_action(args):
         system(f'rm {input_file}')
         system(f'rm {out_jobs_path}')
         if args.format == 'ear2prv':
-            # system(f'rm {out_jobs_path}')
-            if args.events:
-                system(f'rm {events_data_path}')
+            system(f'rm {out_jobs_path}')
+            # if args.events:
+            #     system(f'rm {events_data_path}')
         if args.format == 'summary':
             system(f'rm {df_loops_path} && rm {df_events_path}')
 
