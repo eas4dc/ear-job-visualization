@@ -1066,7 +1066,7 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
         cmd = ["eacct", "-j", job_fmt, "-l", "-c", csv_file]
     else:
         print("Unrecognized format: Please contact with support@eas4dc.com")
-        sys.exit()
+        exit()
 
     # Run the command
     res = run(cmd, stdout=PIPE, stderr=PIPE)
@@ -1074,15 +1074,15 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
     # Check the possible errors
     if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
         print("Error getting ear.conf path")
-        sys.exit()
+        exit()
 
     if "No jobs found" in res.stdout.decode('utf-8'):
         print(f"eacct: {jobid} No jobs found.")
-        sys.exit()
+        exit()
 
     if "No loops retrieved" in res.stdout.decode('utf-8'):
         print("eacct:", job_fmt, "No loops retrieved")
-        sys.exit()
+        exit()
 
     # Request EAR events
 
