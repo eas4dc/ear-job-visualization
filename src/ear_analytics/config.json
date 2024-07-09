@@ -6,9 +6,9 @@
 			"step" : 0.1
 		},
 		"gflops" : {
-			"column_name" : "GFLOPS",
+			"column_name" : "^GFLOPS",
 			"range" : [3, 60],
-			"step" : 15,
+			"step" : 1,
 			"display_name" : "CPU GFLOPS"
 		},
 		"avg_cpufreq" : {

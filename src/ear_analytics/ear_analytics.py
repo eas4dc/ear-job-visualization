@@ -17,6 +17,7 @@ from heapq import merge
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 from importlib_resources import files
 
@@ -334,14 +335,23 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
     # Create the resulting figure for current metric
     print("Creating the figure...")
 
-    fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
-                            squeeze=False, gridspec_kw={'hspace': 0},
-                            layout='constrained', figsize=(6.4, 1 + (6.4/15) * len(m_data_array))
-                            )
-    fig.get_layout_engine().set(h_pad=0, hspace=0)
+    # fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
+    #                         squeeze=False, gridspec_kw={'hspace': 0},
+    #                         layout='constrained', # height_ratios=height_ratios,
+    #                         figsize=(6.4, 1 + (6.4/15) * len(m_data_array))
+    #                         )
+    # fig.get_layout_engine().set(h_pad=0, hspace=0)
+    # fig = plt.figure(figsize=(6.4, (6.4/15) * len(m_data_array)))
+    fig = plt.figure()
+    # grid = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
+    #                  axes_pad=0, label_mode='1', cbar_location='bottom',
+    #                  cbar_mode='edge', share_all=True, cbar_pad='50%', cbar_size='33%')
+    axs = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
+                    axes_pad=0, label_mode='L', cbar_location='bottom', cbar_mode='single', cbar_pad=0.5, cbar_size=0.3)
 
     print(f'Setting title: {fig_title}')
-    axs[0, 0].set_title(fig_title)
+    axs[0].set_title(fig_title)
+    # axs[0, 0].set_title(fig_title)
 
     # Normalize values
 
@@ -367,7 +377,7 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
                             r'(10[01][0-9]))')
     gpu_metric_regex = re.compile(gpu_metric_regex_str)
 
-    for i, _ in enumerate(m_data_array):
+    for ax, (i, _) in zip(axs, enumerate(m_data_array)):
         if granularity != 'app':
             gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
 
@@ -379,39 +389,40 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
         else:
             ylabel_text = ''
 
-        axes = axs[i, 0]
+        ax.grid(axis='x', alpha=0.5)
+        ax.set_aspect(1/30)
 
-        def format_fn(tick_val):
-            """
-            Map each tick with the corresponding
-            elapsed time to label the timeline.
-            """
-            return time_deltas[tick_val].seconds
-
-        axes.grid(axis='x', alpha=0.5)
-
-        axes.set_yticks([0], labels=[ylabel_text])
+        ax.set_yticks([0], labels=[ylabel_text])
         data = np.array(m_data_array[i], ndmin=2)
 
         # Generate the timeline gradient
-        axes.imshow(data, norm=norm, cmap=cmap,
-                    interpolation='nearest', aspect='auto')
-        # axes.set_box_aspect(1/30)
+        im = ax.imshow(data, norm=norm, cmap=cmap,
+                       interpolation='none', aspect=2*len(m_data_array))
 
-        if i < len(m_data_array) - 1:
-            axes.tick_params(axis='x', which='both', bottom=False)
+        # if i < len(m_data_array) - 1:
+        #     ax.tick_params(axis='x', which='both', bottom=False)
+
+    def format_fn(tick_val):
+        """
+        Map each tick with the corresponding
+        elapsed time to label the timeline.
+        """
+        return time_deltas[tick_val].seconds
 
     xticks = np.arange(len(m_data_array[0]), step=20)
     xticklabels = map(format_fn, xticks)
 
-    axs[-1, 0].set_xticks(xticks, labels=xticklabels)
-    axs[-1, 0].minorticks_on()
+    axs[-1].set(xticks=xticks, xticklabels=xticklabels)
+    axs[-1].minorticks_on()
 
     # Create the figure colorbar
 
     label = metric if metric_display_name == '' else metric_display_name
-    fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
-                 ax=axs, location='bottom', label=label, format='%.2f')
+    axs.cbar_axes[0].colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
+                              label=label, format=None)
+
+    # fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
+    #              cax=cb[0], location='bottom', label=label, format='%.2f')
 
     return fig
 
