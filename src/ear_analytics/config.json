@@ -313,6 +313,18 @@
 		"GPU(\\d)_UTIL_PERC" : "Float64",
 		"GPU(\\d)_MEM_UTIL_PERC" : "Float64",
 		"GPU(\\d)_GFLOPS" : "Float64",
+		"GPU(\\d)_gr_engine_active" : "Float64",
+		"GPU(\\d)_sm_active" : "Float64",
+		"GPU(\\d)_sm_occupancy" : "Float64",
+		"GPU(\\d)_tensor_active" : "Float64",
+		"GPU(\\d)_fp64_active" : "Float64",
+		"GPU(\\d)_fp32_active" : "Float64",
+		"GPU(\\d)_fp16_active" : "Float64",,
+		"GPU(\\d)_dram_active" : "Float64",
+		"GPU(\\d)_nvlink_tx_bytes" : "Float64",
+		"GPU(\\d)_nvlink_rx_bytes" : "Float64",
+		"GPU(\\d)_pcie_tx_bytes" : "Float64",
+		"GPU(\\d)_pcie_rx_bytes" : "Float64",
 		"TIMESTAMP" : "Int64"
 	}
 }

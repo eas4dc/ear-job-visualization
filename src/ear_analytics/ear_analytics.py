@@ -347,7 +347,8 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
     #                  axes_pad=0, label_mode='1', cbar_location='bottom',
     #                  cbar_mode='edge', share_all=True, cbar_pad='50%', cbar_size='33%')
     axs = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
-                    axes_pad=0, label_mode='L', cbar_location='bottom', cbar_mode='single', cbar_pad=0.5, cbar_size=0.3)
+                    axes_pad=0, label_mode='L', cbar_location='bottom',
+                    cbar_mode='single', cbar_pad=0.5, cbar_size=0.3)
 
     print(f'Setting title: {fig_title}')
     axs[0].set_title(fig_title)
@@ -575,7 +576,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                                          (df_job['STEPID'] == s) &
                                          (df_job['APPID'] == a)]['START_TIME']
 
-            if (not task_start_time.empty):
+            if not task_start_time.empty:
                 jobs += [j]
                 steps += [s]
                 apps += [a]
@@ -593,14 +594,6 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                          .fillna(0))
 
         return concat([df_loops, df_start_time], ignore_index=True)
-
-        # start_time column is also changed to TIMESTAMP
-        df_job_with_nodes = (df_loops
-                             .merge(df_job).loc[:, ['JOBID', 'STEPID', 'NODENAME', 'start_time']]
-                             .rename({'start_time': 'TIMESTAMP'}, axis=1))
-
-        # df_job with node information and TIMESTAMP can be merged with loops
-        return df_loops.merge(df_job_with_nodes, how='outer').fillna(0)
 
     def multiply_floats_by_1000000(df):
         df_floats = (df.select_dtypes(include=['Float64'])
@@ -650,6 +643,18 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                 .join(Series(dtype='Int64', name='gpu_util'))
                 .join(Series(dtype='Int64', name='gpu_mem_util'))
                 .join(Series(dtype='Int64', name='gpu_gflops'))
+                .join(Series(dtype='Int64', name='dcgm_gr_engine_active'))
+                .join(Series(dtype='Int64', name='dcgm_sm_active'))
+                .join(Series(dtype='Int64', name='dcgm_sm_occupancy'))
+                .join(Series(dtype='Int64', name='dcgm_pipe_tensor_active'))
+                .join(Series(dtype='Int64', name='dcgm_pipe_fp64_active'))
+                .join(Series(dtype='Int64', name='dcgm_pipe_fp32_active'))
+                .join(Series(dtype='Int64', name='dcgm_pipe_fp16_active'))
+                .join(Series(dtype='Int64', name='dcgm_dram_active'))
+                .join(Series(dtype='Int64', name='dcgm_nvlink_tx_bytes'))
+                .join(Series(dtype='Int64', name='dcgm_nvlink_rx_bytes'))
+                .join(Series(dtype='Int64', name='dcgm_pcie_tx_bytes'))
+                .join(Series(dtype='Int64', name='dcgm_pcie_rx_bytes'))
                 )
     # print(df_loops.info())
 
@@ -868,6 +873,12 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                                       'time', 'task_id', 'app_id', 'JOBNAME',
                                       'gpu_power', 'gpu_freq', 'gpu_mem_freq',
                                       'gpu_util', 'gpu_mem_util', 'gpu_gflops',
+                                      'dcgm_gr_engine_active', 'dcgm_sm_active',
+                                      'dcgm_sm_occupancy', 'dcgm_pipe_tensor_active',
+                                      'dcgm_pipe_fp64_active', 'dcgm_pipe_fp32_active',
+                                      'dcgm_pipe_fp16_active', 'dcgm_dram_active',
+                                      'dcgm_nvlink_tx_bytes', 'dcgm_nvlink_rx_bytes',
+                                      'dcgm_pcie_tx_bytes', 'dcgm_pcie_rx_bytes',
                                       'TIMESTAMP', 'START_TIME', 'END_TIME']
                              ).columns
                )
@@ -884,13 +895,28 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
     timestamp_idx = columns.get_loc('time')
 
     gpu_field_regex = re.compile(r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                                 r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS)')
+                                 r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS|gr_engine_active|'
+                                 r'sm_active|sm_occupancy|tensor_active|fp64_active|'
+                                 r'fp32_active|fp16_active|dram_active|nvlink_tx_bytes|'
+                                 r'nvlink_rx_bytes|pcie_tx_bytes|pcie_rx_bytes)')
     gpu_field_map = {'POWER_W': 'gpu_power',
                      'FREQ_KHZ': 'gpu_freq',
                      'MEM_FREQ_KHZ': 'gpu_mem_freq',
                      'UTIL_PERC': 'gpu_util',
                      'MEM_UTIL_PERC': 'gpu_mem_util',
-                     'GFLOPS': 'gpu_gflops'
+                     'GFLOPS': 'gpu_gflops',
+                     'gr_engine_active' : 'dcgm_gr_engine_active',
+                     'sm_active' : 'dcgm_sm_active',
+                     'sm_occupancy' : 'dcgm_sm_occupancy',
+                     'tensor_active' : 'dcgm_pipe_tensor_active',
+                     'fp64_active' : 'dcgm_pipe_fp64_active',
+                     'fp32_active' : 'dcgm_pipe_fp32_active',
+                     'fp16_active' : 'dcgm_pipe_fp16_active',
+                     'dram_active' : 'dcgm_dram_active',
+                     'nvlink_tx_bytes' : 'dcgm_nvlink_tx_bytes',
+                     'nvlink_rx_bytes' : 'dcgm_nvlink_rx_bytes',
+                     'pcie_tx_bytes' : 'dcgm_pcie_tx_bytes',
+                     'pcie_rx_bytes' : 'dcgm_pcie_rx_bytes'
                      }
 
     body_list = []
@@ -919,7 +945,10 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
     # #### Loops configuration file
 
     cols_regex = re.compile(r'(GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS))'
+                            r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS|gr_engine_active|'
+                            r'sm_active|sm_occupancy|tensor_active|fp64_active|'
+                            r'fp32_active|fp16_active|dram_active|nvlink_tx_bytes|'
+                            r'nvlink_rx_bytes|pcie_tx_bytes|pcie_rx_bytes))'
                             r'|JOBID|STEPID|NODENAME|LOOPID|LOOP_NEST_LEVEL|'
                             r'LOOP_SIZE|TIMESTAMP|START_TIME|END_TIME|time|'
                             r'task_id|app_id|JOBNAME|APPID')
