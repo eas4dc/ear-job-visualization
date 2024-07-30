@@ -319,7 +319,7 @@
 		"GPU(\\d)_tensor_active" : "Float64",
 		"GPU(\\d)_fp64_active" : "Float64",
 		"GPU(\\d)_fp32_active" : "Float64",
-		"GPU(\\d)_fp16_active" : "Float64",,
+		"GPU(\\d)_fp16_active" : "Float64",
 		"GPU(\\d)_dram_active" : "Float64",
 		"GPU(\\d)_nvlink_tx_bytes" : "Float64",
 		"GPU(\\d)_nvlink_rx_bytes" : "Float64",
