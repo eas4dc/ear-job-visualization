@@ -16,7 +16,7 @@ import configparser
 import pandas as pd
 
 from itertools import dropwhile
-from json import load
+from json import load, dumps
 
 
 def read_data(file_path, **kwargs):
@@ -84,3 +84,7 @@ def read_configuration(filename):
     """
     with open(filename, 'r') as fn:
         return load(fn)
+
+
+def print_configuration(filename):
+    print(dumps(read_configuration(filename), indent=2))
