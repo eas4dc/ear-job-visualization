@@ -48,264 +48,7 @@ from .phases import (read_phases_configuration,
                      df_phases_phase_time_ratio,
                      df_phases_to_tex_tabular)
 
-from .job_summary import (job_cpu_summary_df,
-                          job_summary_to_tex_tabular,
-                          job_gpu_summary,
-                          )
-
 from .events import read_events_configuration
-
-
-def build_job_summary(df_long, df_loops, df_phases, metrics_conf, phases_conf):
-    """
-    Generate a job summary.
-    """
-    print('Building job summary...')
-
-    job_id = df_long['JOBID'].unique()
-    if job_id.size != 1:
-        print(f'ERROR: Only one job is supported. Jobs detected: {job_id}.')
-        return
-    else:
-        job_id = str(job_id[0])
-
-    try:
-        print(f'Creating directory for job {job_id}...')
-        mkdir(job_id)
-    except FileExistsError:
-        print(f'Error: Directory {job_id} already exists.')
-        return
-
-    try:
-
-        print('Getting main file from template...')
-
-        main_file_path = path.join(job_id, 'main.tex')
-
-        main_file_template = (files('ear_analytics')
-                              .joinpath('templates/main.tex.template'))
-
-        cmd = ' '.join(['cp', str(main_file_template), main_file_path])
-
-        run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
-
-    except CalledProcessError as err:
-        print('Error copying the template tex file:',
-              err.returncode, f'({err.output})')
-        return
-
-    # Build the resulting document title.
-    text_dir = path.join(job_id, 'text')
-
-    print(f'Creating {text_dir} directory...')
-    mkdir(text_dir)
-
-    job_name = df_long['JOBNAME'].unique()[0]
-    title = Command('title', f'{job_name} report')
-    title.generate_tex(path.join(text_dir, 'title'))
-
-    tables_dir = path.join(job_id, 'tables')
-
-    print(f'Creating {tables_dir} directory...')
-    mkdir(tables_dir)
-
-    # Job summary
-
-    print('Building job summary table')
-
-    job_sum_fn = path.join(tables_dir, 'job_summary')
-
-    (df_long
-     .pipe(job_cpu_summary_df, metrics_conf)
-     .pipe(job_summary_to_tex_tabular, job_sum_fn)
-     )
-
-    # Job summary (GPU part)
-
-    gpu_sum_file_path = path.join(text_dir, 'job_gpu_summary.tex')
-
-    if (edata.df_has_gpu_data(df_long)):
-
-        try:
-
-            print('Getting job GPU summary file from template...')
-
-            templ_gpu = 'templates/text/job_gpu_summary.tex'
-            gpu_sum_file_template = files('ear_analytics').joinpath(templ_gpu)
-
-            cmd = ' '.join(['cp',
-                            str(gpu_sum_file_template),
-                            gpu_sum_file_path])
-
-            run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
-
-        except CalledProcessError as err:
-            print('Error copying the template tex file:',
-                  err.returncode, f'({err.output})')
-            return
-
-        job_gpusum_fn = path.join(tables_dir, 'job_gpu_summary')
-
-        # Build the DataFrame with summary and create the tabular
-        (df_long
-         .pipe(job_gpu_summary, metrics_conf, job_gpusum_fn)
-         )
-    else:
-        # Create an empry file
-        try:
-            with open(gpu_sum_file_path, mode='w'):
-                pass
-        except OSError:
-            print('Error: Creating the dummy GPU summary table file.')
-            return
-
-    # Phases summary
-
-    print('Building phases summary...')
-
-    job_phasesum_fn = path.join(tables_dir, 'job_phases_summary')
-
-    (df_phases
-     .pivot(index='node_id', columns='Event_type', values='Value')
-     .pipe(df_phases_phase_time_ratio, phases_conf)
-     .pipe(df_phases_to_tex_tabular, job_phasesum_fn)
-     )
-
-    timelines_dir = path.join(job_id, 'timelines')
-
-    print('Creating timelines dir...')
-    mkdir(timelines_dir)
-
-    print('Building job timelines...')
-
-    # Aggregated power
-    agg_metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
-                        metric_step('dc_power', metrics_conf),
-                        path.join(timelines_dir, 'agg_dcpower'),
-                        fig_title='Accumulated DC Node Power (W)')
-
-    # Aggregated Mem. bandwidth
-    agg_metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
-                        metric_step('gbs', metrics_conf),
-                        path.join(timelines_dir, 'agg_gbs'),
-                        fig_title='Accumulated memory bandwidth (GB/s)')
-
-    # Aggregated GFlop/s
-    agg_metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
-                        metric_step('gflops', metrics_conf),
-                        path.join(timelines_dir, 'agg_gflops'),
-                        fig_title='Accumulated CPU GFlop/s')
-
-    # Aggregated I/O
-    agg_metric_timeline(df_loops, metric_regex('io_mbs', metrics_conf),
-                        metric_step('io_mbs', metrics_conf),
-                        path.join(timelines_dir, 'agg_iombs'),
-                        fig_title='Accumulated I/O throughput (MB/s)')
-
-    # GPU timelines
-
-    gpu_aggpwr_file_path = path.join(text_dir, 'agg_gpupwr.tex')
-    gpu_util_file_path = path.join(text_dir, 'gpu_util.tex')
-
-    if edata.df_has_gpu_data(df_loops):
-        # Aggregated GPU power
-        try:
-            print('Getting job GPU agg power file from template...')
-
-            agg_gpu_templ = 'templates/text/agg_gpupwr.tex'
-            gpu_aggpwr_file_template = (files('ear_analytics')
-                                        .joinpath(agg_gpu_templ))
-
-            cmd = ' '.join(['cp',
-                            str(gpu_aggpwr_file_template),
-                            gpu_aggpwr_file_path])
-
-            run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
-
-        except CalledProcessError as err:
-            print('Error copying the template tex file:',
-                  err.returncode, f'({err.output})')
-            return
-        else:
-            gpu_pwr_re = metric_regex('gpu_power', metrics_conf)
-
-            df_agg_gpupwr = (df_loops
-                             .assign(
-                                tot_gpu_pwr=lambda x: (x.filter(regex=gpu_pwr_re)
-                                                        .sum(axis=1))
-                                 )
-                             )
-            agg_metric_timeline(df_agg_gpupwr, 'tot_gpu_pwr',
-                                metric_step('tot_gpu_pwr', metrics_conf),
-                                path.join(timelines_dir, 'agg_gpupower'),
-                                fig_title='Aggregated GPU Power (W)')
-        # Per-node GPU util
-        try:
-            print('Getting job GPU util file from template...')
-
-            gpu_util_file_template = (files('ear_analytics')
-                                      .joinpath('templates/text/gpu_util.tex'))
-
-            cmd = ' '.join(['cp', str(gpu_util_file_template), gpu_util_file_path])
-
-            run(cmd, stdout=PIPE, stderr=STDOUT, check=True, shell=True)
-
-        except CalledProcessError as err:
-            print('Error copying the template tex file:',
-                  err.returncode, f'({err.output})')
-            return
-        else:
-            norm = mpl.colors.Normalize(vmin=0, vmax=100, clip=True)
-            metric_timeline(edata.filter_invalid_gpu_series(df_loops),
-                            metric_regex('gpu_util', metrics_conf),
-                            metric_step('gpu_util', metrics_conf),
-                            path.join(timelines_dir, 'per-node_gpuutil'),
-                            norm=norm, fig_title='GPU utilization (%)')
-    else:
-        # Create an empty file
-        try:
-            with open(gpu_aggpwr_file_path, mode='w'):
-                pass
-        except OSError:
-            print('Error: Creating the dummy GPU agg power file.')
-            return
-        # Create an empty file
-        try:
-            with open(gpu_util_file_path, mode='w'):
-                pass
-        except OSError:
-            print('Error: Creating the dummy GPU util file.')
-            return
-
-    # Per-node CPI
-    metric_timeline(df_loops, metric_regex('cpi', metrics_conf),
-                    metric_step('cpi', metrics_conf),
-                    path.join(timelines_dir, 'per-node_cpi'),
-                    fig_title='Cycles per Instruction')
-
-    # Per-node GBS
-    metric_timeline(df_loops, metric_regex('gbs', metrics_conf),
-                    metric_step('gbs', metrics_conf),
-                    path.join(timelines_dir, 'per-node_gbs'),
-                    fig_title='Memory bandwidth (GB/s)')
-
-    # Per-node GFlop/s
-    metric_timeline(df_loops, metric_regex('gflops', metrics_conf),
-                    metric_step('gflops', metrics_conf),
-                    path.join(timelines_dir, 'per-node_gflops'),
-                    fig_title='CPU GFlop/s')
-
-    # Per-node Avg. CPU freq.
-    metric_timeline(df_loops, metric_regex('avg_cpufreq', metrics_conf),
-                    metric_step('avg_cpufreq', metrics_conf),
-                    path.join(timelines_dir, 'per-node_avgcpufreq'),
-                    fig_title='Avg. CPU frequency (kHz)')
-
-    # Per-node DC Power
-    metric_timeline(df_loops, metric_regex('dc_power', metrics_conf),
-                    metric_step('dc_power', metrics_conf),
-                    path.join(timelines_dir, 'per-node_dcpower'),
-                    fig_title='DC node power (W)')
 
 
 def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
@@ -437,19 +180,6 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
     #              cax=cb[0], location='bottom', label=label, format='%.2f')
 
     return fig
-
-
-def agg_metric_timeline(df, metric, step, fig_fn, fig_title=''):
-    """
-    Create and save a figure timeline from the DataFrame `df`, which contains
-    EAR loop data, for metric/s that match the regular expression `metric`.
-    The resulting figure shows the aggregated value of the metric along all
-    involved nodes in EAR loop data.
-    """
-
-    fig = generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
-                                       granularity='app')
-    fig.savefig(fig_fn)
 
 
 def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
@@ -1157,8 +887,6 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
 
     if result_format == 'runtime' or result_format == "ear2prv":
         cmd = ["eacct", "-j", job_fmt, "-r", "-o", "-c", csv_file]
-    elif result_format == 'summary':
-        cmd = ["eacct", "-j", job_fmt, "-l", "-c", csv_file]
     else:
         print("Unrecognized format: Please contact with support@eas4dc.com")
         exit()
@@ -1181,14 +909,9 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
 
     # Request EAR events
 
-    if ear_events or result_format == 'summary':
+    if ear_events:
         cmd = ["eacct", "-j", job_fmt, "-x", '-c',
                '.'.join(['events', csv_file])]
-        res = run(cmd, stdout=PIPE, stderr=PIPE)
-
-    if result_format == 'summary':
-        output_fn = '.'.join(['loops', csv_file])
-        cmd = ["eacct", "-j", job_fmt, "-r", '-o', '-c', output_fn]
         res = run(cmd, stdout=PIPE, stderr=PIPE)
 
     # Return generated file
@@ -1256,10 +979,6 @@ def parser_action(args):
 
     elif args.format == "ear2prv":
         events_data_path = None
-        # if args.events:
-        #     events_data_path = (path
-        #                         .join(head_path,
-        #                               '.'.join(['events', tail_path])))
 
         # Call ear2prv format method
         ear2prv(out_jobs_path, args.input_file,
@@ -1269,57 +988,11 @@ def parser_action(args):
                 events_data_fn=events_data_path, job_id=args.job_id,
                 step_id=args.step_id, output_fn=args.output)
 
-    elif args.format == 'summary':
-        try:
-            df_long = (read_data(args.input_file, sep=';')
-                       .pipe(filter_df,
-                             JOBID=args.job_id,
-                             STEPID=args.step_id))
-            print(df_long)
-        except FileNotFoundError:
-            return
-        else:
-            head_path, tail_path = path.split(args.input_file)
-
-            df_loops_path = path.join(head_path,
-                                      '.'.join(['loops', tail_path])
-                                      )
-            try:
-                df_loops = (read_data(df_loops_path, sep=';')
-                            .pipe(filter_df,
-                                  JOBID=args.job_id,
-                                  STEPID=args.step_id
-                                  )
-                            )
-            except FileNotFoundError:
-                return
-            else:
-                df_events_path = path.join(head_path,
-                                           '.'.join(['events', tail_path])
-                                           )
-                try:
-                    df_events = (read_data(df_events_path, sep=r'\s+')
-                                 .pipe(filter_df,
-                                       Job_id=args.job_id,
-                                       Step_id=args.step_id))
-                except FileNotFoundError:
-                    return
-                else:
-                    metrics_conf = read_metrics_configuration(config_file_path)
-                    phases_conf = read_phases_configuration(config_file_path)
-
-                    build_job_summary(df_long, df_loops, df_events,
-                                      metrics_conf, phases_conf)
-
     if csv_generated and not args.keep_csv:
         system(f'rm {input_file}')
         system(f'rm {out_jobs_path}')
         if args.format == 'ear2prv':
             system(f'rm {out_jobs_path}')
-            # if args.events:
-            #     system(f'rm {events_data_path}')
-        if args.format == 'summary':
-            system(f'rm {df_loops_path} && rm {df_events_path}')
 
 
 def build_parser():
@@ -1363,11 +1036,10 @@ def build_parser():
     main_excl_grp = main_group.add_mutually_exclusive_group(required=True)
 
     # Specify
-    main_excl_grp.add_argument('--format', choices=['runtime', 'ear2prv', 'summary'],
+    main_excl_grp.add_argument('--format', choices=['runtime', 'ear2prv'],
                                help='''Build results according to chosen format:
                                `runtime` (static images) or `ear2prv` (using paraver
-                               tool). `summary` (Beta) option builds a
-                               small report about the job metrics.''')
+                               tool).''')
 
     main_excl_grp.add_argument('--print-config', action='store_true',
                                help='''Prints the used configuration file.''')
@@ -1428,12 +1100,6 @@ def build_parser():
                         'be viewed with `ear-job-analytics --avail-metrics`.')
     runtime_grp.add_argument('-m', '--metrics', help=metrics_help_str,
                              metavar='metric', nargs='+')
-
-    # ear2prv_group_args = parser.add_argument_group('`ear2prv` format options')
-
-    # events_help_str = 'Include EAR events in the trace fille.'
-    # ear2prv_group_args.add_argument('-e', '--events', action='store_true',
-    #                                 help=events_help_str)
 
     return parser
 
