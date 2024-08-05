@@ -1354,7 +1354,7 @@ def build_parser():
 
     main_group = parser.add_argument_group('Main options',
                                            description='''The main option flags
-                                           required by the tool.''') 
+                                           required by the tool.''')
 
     main_group.add_argument('-c', '--config-file',
                         help='Specify a custom configuration file.')
@@ -1362,7 +1362,7 @@ def build_parser():
     # format and print-config options are mutually exclusive
     main_excl_grp = main_group.add_mutually_exclusive_group(required=True)
 
-    # Specify 
+    # Specify
     main_excl_grp.add_argument('--format', choices=['runtime', 'ear2prv', 'summary'],
                                help='''Build results according to chosen format:
                                `runtime` (static images) or `ear2prv` (using paraver
