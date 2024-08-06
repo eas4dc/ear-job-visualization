@@ -43,6 +43,7 @@ from .utils import (filter_df, read_job_data_config, read_loop_data_config,
                     function_compose)
 
 from . import ear_data as edata
+from . import static_figures
 
 from .phases import (read_phases_configuration,
                      df_phases_phase_time_ratio,
@@ -51,140 +52,9 @@ from .phases import (read_phases_configuration,
 from .events import read_events_configuration
 
 
-def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric,
-                                 step, v_min=None, v_max=None, fig_title='',
-                                 granularity='node', metric_display_name=''):
-    """
-    Generates the timeline gradient.
-
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
-    """
-
-    metric_filter = df.filter(regex=metric).columns
-
-    if granularity != 'app':
-        m_data = edata.metric_timeseries_by_node(df, metric_filter)
-    else:
-        m_data = edata.metric_agg_timeseries(df, metric_filter)
-
-    m_data.index = to_datetime(m_data.index, unit='s')
-
-    new_idx = (date_range(start=to_datetime(app_start_time, unit='s'),
-                          end=to_datetime(app_end_time, unit='s'), freq='1s')
-               .union(m_data.index))
-
-    m_data = m_data.reindex(new_idx).bfill()
-
-    m_data_array = m_data.values.transpose()
-
-    if granularity == 'app':
-        m_data_array = m_data_array.reshape(1, m_data_array.shape[0])
-
-    # Compute time deltas to be showed to
-    # the end user instead of an absolute timestamp.
-    time_deltas = [i - m_data.index[0] for i in m_data.index]
-    # print(time_deltas, len(time_deltas))
-
-    # Create the resulting figure for current metric
-    print("Creating the figure...")
-
-    # fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
-    #                         squeeze=False, gridspec_kw={'hspace': 0},
-    #                         layout='constrained', # height_ratios=height_ratios,
-    #                         figsize=(6.4, 1 + (6.4/15) * len(m_data_array))
-    #                         )
-    # fig.get_layout_engine().set(h_pad=0, hspace=0)
-    # fig = plt.figure(figsize=(6.4, (6.4/15) * len(m_data_array)))
-    fig = plt.figure()
-    # grid = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
-    #                  axes_pad=0, label_mode='1', cbar_location='bottom',
-    #                  cbar_mode='edge', share_all=True, cbar_pad='50%', cbar_size='33%')
-    axs = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
-                    axes_pad=0, label_mode='L', cbar_location='bottom',
-                    cbar_mode='single', cbar_pad=0.5, cbar_size=0.3)
-
-    print(f'Setting title: {fig_title}')
-    axs[0].set_title(fig_title)
-    # axs[0, 0].set_title(fig_title)
-
-    # Normalize values
-
-    cmap = mpl.colormaps['viridis_r']
-    bounds = np.arange(v_min if v_min is not None else np.nanmin(m_data_array),
-                       v_max + step if v_max is not None
-                       else np.nanmax(m_data_array) + step,
-                       step)
-    if bounds.size > 16 or bounds.size < 5:
-        print(f'Warning! {bounds.size} discrete intervals generated.')
-
-        if bounds.size > 16:
-            print(f'Consider increasing the step (currently {step})'
-                  f' for {metric}.')
-        else:
-            print(f'Consider decreasing the step (currently {step})'
-                  f' for {metric}.')
-
-    norm = mpl.colors.BoundaryNorm(bounds, cmap.N, extend='both')
-
-    gpu_metric_regex_str = (r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                            r'UTIL_PERC|MEM_UTIL_PERC|'
-                            r'(10[01][0-9]))')
-    gpu_metric_regex = re.compile(gpu_metric_regex_str)
-
-    for ax, (i, _) in zip(axs, enumerate(m_data_array)):
-        if granularity != 'app':
-            gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
-
-            if gpu_metric_match:
-                ylabel_text = (f'GPU{gpu_metric_match.group(1)}'
-                               f' @ {m_data.columns[i][1]}')
-            else:
-                ylabel_text = m_data.columns[i][1]
-        else:
-            ylabel_text = ''
-
-        ax.grid(axis='x', alpha=0.5)
-        ax.set_aspect(1/30)
-
-        ax.set_yticks([0], labels=[ylabel_text])
-        data = np.array(m_data_array[i], ndmin=2)
-
-        # Generate the timeline gradient
-        im = ax.imshow(data, norm=norm, cmap=cmap,
-                       interpolation='none', aspect=2*len(m_data_array))
-
-        # if i < len(m_data_array) - 1:
-        #     ax.tick_params(axis='x', which='both', bottom=False)
-
-    def format_fn(tick_val):
-        """
-        Map each tick with the corresponding
-        elapsed time to label the timeline.
-        """
-        return time_deltas[tick_val].seconds
-
-    xticks = np.arange(len(m_data_array[0]), step=20)
-    xticklabels = map(format_fn, xticks)
-
-    axs[-1].set(xticks=xticks, xticklabels=xticklabels)
-    axs[-1].minorticks_on()
-
-    # Create the figure colorbar
-
-    label = metric if metric_display_name == '' else metric_display_name
-    axs.cbar_axes[0].colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
-                              label=label, format=None)
-
-    # fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
-    #              cax=cb[0], location='bottom', label=label, format='%.2f')
-
-    return fig
-
-
 def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
-    fig = generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
-                                       **kwargs)
+    fig = static_figures.generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
+                                               **kwargs)
     fig.savefig(fig_fn)
 
 
@@ -243,11 +113,13 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
                     if step_id is not None:
                         fig_title = '-'.join([fig_title, str(step_id)])
 
-            fig = generate_metric_timeline_fig(df, app_start_time,
-                                               app_end_time, metric_name, step,
-                                               v_min=v_min, v_max=v_max,
-                                               fig_title=fig_title,
-                                               metric_display_name=disply_name)
+            fig = static_figures.generate_metric_timeline_fig(df, app_start_time,
+                                                       app_end_time,
+                                                       metric_name, step,
+                                                       v_min=v_min,
+                                                       v_max=v_max,
+                                                       fig_title=fig_title,
+                                                       metric_display_name=disply_name)
 
             # if save:
             name = f'runtime_{metric}'
@@ -1053,9 +925,9 @@ def build_parser():
                                            any of "--format" choices.''')
 
     format_grp.add_argument('--input-file',
-                        help=('''Specifies the input file(s)
+                        help='''Specifies the input file(s)
                               name(s) to read data from. It can be a path.
-                              (Required).'''))
+                              (Required).''')
 
     format_grp.add_argument('-j', '--job-id', type=int,
                             help='Filter the data by the Job ID (Required).')
