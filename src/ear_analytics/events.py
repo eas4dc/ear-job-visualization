@@ -7,6 +7,7 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 #######################################################################
+"""This module contains methods related to EAR special events."""
 
 
 from .io_api import read_configuration

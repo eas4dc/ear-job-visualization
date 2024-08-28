@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: EPL-2.0
 #######################################################################
 
+"""This module has methods related to work with EARL metrics."""
 
 from .io_api import read_configuration
 

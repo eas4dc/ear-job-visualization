@@ -13,10 +13,10 @@
 import os
 import configparser
 
-import pandas as pd
-
 from itertools import dropwhile
 from json import load, dumps
+
+import pandas as pd
 
 
 def read_data(file_path, **kwargs):
@@ -34,6 +34,8 @@ def read_data(file_path, **kwargs):
             else:
                 path_file = filename
             yield pd.read_csv(path_file, **kwargs)
+
+    data_f = pd.DataFrame()
 
     if isinstance(file_path, str):
         # `file_path` is only a string containing some file or a directory
@@ -82,9 +84,10 @@ def read_configuration(filename):
     Read configuration stored at `filename` in JSON format.
     Returns the loaded dict directly.
     """
-    with open(filename, 'r') as fn:
+    with open(filename, 'r', encoding='utf-8') as fn:
         return load(fn)
 
 
 def print_configuration(filename):
+    """Pretty prints the json data passed as argument."""
     print(dumps(read_configuration(filename), indent=2))

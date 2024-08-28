@@ -12,7 +12,7 @@
 """ This module contains functions that can be applied
 to a DataFrame contained known EAR data. """
 
-from numpy import sum
+import numpy as np
 
 from .utils import join_metric_node
 from .metrics import read_metrics_configuration, metric_regex
@@ -129,5 +129,5 @@ def metric_agg_timeseries(df, metric):
            .bfill()
            .ffill()
            .pipe(join_metric_node)
-           .agg(sum, axis=1)
+           .agg(np.sum, axis=1)
            )
