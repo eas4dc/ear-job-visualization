@@ -102,20 +102,9 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, step,
     # Create the resulting figure for current metric
     print("Creating the figure...")
 
-    # fig, axs = plt.subplots(nrows=len(m_data_array), sharex=True,
-    #                         squeeze=False, gridspec_kw={'hspace': 0},
-    #                         layout='constrained', # height_ratios=height_ratios,
-    #                         figsize=(6.4, 1 + (6.4/15) * len(m_data_array))
-    #                         )
-    # fig.get_layout_engine().set(h_pad=0, hspace=0)
-    # fig = plt.figure(figsize=(6.4, (6.4/15) * len(m_data_array)))
     fig = plt.figure()
-    # grid = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
-    #                  axes_pad=0, label_mode='1', cbar_location='bottom',
-    #                  cbar_mode='edge', share_all=True, cbar_pad='50%', cbar_size='33%')
-    axs = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1),
-                    axes_pad=0, label_mode='L', cbar_location='bottom',
-                    cbar_mode='single', cbar_pad=0.5, cbar_size=0.3)
+    axs = ImageGrid(fig, 111, nrows_ncols=(len(m_data_array), 1), axes_pad=0,
+                    label_mode='L', cbar_mode='single', cbar_location='bottom', cbar_pad=0.5, cbar_size='20%')
 
     print(f'Setting title: {kwargs.get("fig_title", "")}')
     axs[0].set_title(kwargs.get('fig_title', ''))
@@ -124,12 +113,11 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, step,
     norm = build_gradient_norm(m_data_array, step,
                                kwargs.get('v_min', None),
                                kwargs.get('v_max', None))
-
     gpu_metric_regex = re.compile((r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
                                    r'UTIL_PERC|MEM_UTIL_PERC|'
                                    r'(10[01][0-9]))'))
 
-    for ax, (i, _) in zip(axs, enumerate(m_data_array)):
+    for i, _ in enumerate(m_data_array):
         if granularity != 'app':
             gpu_metric_match = gpu_metric_regex.search(m_data.columns[i][0])
 
@@ -141,34 +129,23 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, step,
         else:
             ylabel_text = ''
 
-        ax.grid(axis='x', alpha=0.5)
-        ax.set_aspect(1/30)
-
-        ax.set_yticks([0], labels=[ylabel_text])
+        axs[i].grid(axis='x', alpha=0.5)
+        axs[i].set_yticks([0], labels=[ylabel_text])
+        axs[i].set_xmargin(0)
+        axs[i].set_ymargin(0)
 
         # Generate the timeline gradient
-        ax.imshow(np.array(m_data_array[i], ndmin=2), norm=norm,
-                  cmap=mpl.colormaps['viridis_r'],
-                  interpolation='none', aspect=2*len(m_data_array))
+        viridis = mpl.colormaps['viridis_r']
+        axs[i].bar(range(len(m_data_array[i])), len(m_data_array[i])/10, width=1, color=[viridis(norm(x)) if not np.isnan(x) else 'white' for x in m_data_array[i]])
+        # for x in m_data_array[i]:
+        #     print(norm(x), viridis(norm(x)))
 
-    def format_fn(tick_val):
-        """
-        Map each tick with the corresponding
-        elapsed time to label the timeline.
-        """
-        return get_elapsed(m_data.index, tick_val)
-
-    xticks = np.arange(len(m_data_array[0]), step=20)
-    axs[-1].set(xticks=xticks,
-                xticklabels=map(format_fn, xticks))
     axs[-1].minorticks_on()
 
     # Create the figure colorbar
 
     axs.cbar_axes[0].colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
-                              kwargs.get('metric_display_name', metric),
+                              label=kwargs.get('metric_display_name', metric),
                               format=None)
-    # fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='viridis_r'),
-    #              cax=cb[0], location='bottom', label=label, format='%.2f')
 
     return fig
