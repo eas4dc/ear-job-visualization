@@ -1,8 +1,8 @@
 # ear-job-analytics
 
-A tool to automatically read and visualise data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) software.
-**ear-analytics** is a cli program written in Python which lets you plot the EAR data ~given by some of its commands or~ by using some report plug-in offered by the EAR Library (EARL).
-The main visualisation target is to show runtime metrics collected by EARL in a timeline graph.
+A tool to automatically read and visualise runtime data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) software.
+**ear-analytics** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
+The main visualisation target is to show runtime metrics collected by the EAR Library in a timeline graph.
 
 By now this tool supports two kind of output formats:
 1. Directly generate images showing runtime information.
@@ -24,7 +24,6 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 - pandas
 - matplotlib
-- jinja2
 - importlib_resources
 
 ~By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.~
