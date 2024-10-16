@@ -14,21 +14,15 @@
 
 import sys
 from argparse import HelpFormatter, ArgumentParser
-from os import mkdir, path, system
-from subprocess import run, PIPE, STDOUT, CalledProcessError
+from os import path, system
+import subprocess
 from time import strftime, localtime
 import re
 
 import numpy as np
 
-from pandas import to_datetime, date_range, Series, unique, DataFrame, concat
-from pylatex import Command
-
-from heapq import merge
-
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import ImageGrid
+import pandas as pd
+import heapq
 
 from importlib_resources import files
 
@@ -36,8 +30,7 @@ from itertools import chain
 
 from .io_api import read_data, print_configuration
 
-from .metrics import (metric_regex, metric_step, read_metrics_configuration,
-                      get_plottable_metrics)
+from .metrics import read_metrics_configuration, get_plottable_metrics
 
 from .utils import (filter_df, read_job_data_config, read_loop_data_config,
                     function_compose)
@@ -53,8 +46,9 @@ from .events import read_events_configuration
 
 
 def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
-    fig = static_figures.generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
-                                               **kwargs)
+    fig = static_figures.generate_metric_timeline_fig(df, metric, step,
+                                                      fig_title=fig_title,
+                                                      **kwargs)
     fig.savefig(fig_fn)
 
 
@@ -159,7 +153,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
         """
         Returns df with types set by cols_config
         """
-        ret_df = DataFrame(index=df.index)
+        ret_df = pd.DataFrame(index=df.index)
         dfs = [(df
                 .filter(regex=regex)
                 .pipe(lambda df: df.astype(cols_config[regex])
@@ -200,13 +194,13 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                       f"step {s} app {a}. This job-step-app won't be on the "
                       "output trace.")
 
-        df_start_time = (DataFrame({'JOBID': jobs, 'STEPID': steps,
+        df_start_time = (pd.DataFrame({'JOBID': jobs, 'STEPID': steps,
                                     'APPID': apps, 'NODENAME': nodes,
                                     'TIMESTAMP': times},
                                    columns=df_loops.columns)
                          .fillna(0))
 
-        return concat([df_loops, df_start_time], ignore_index=True)
+        return pd.concat([df_loops, df_start_time], ignore_index=True)
 
     def multiply_floats_by_1000000(df):
         df_floats = (df.select_dtypes(include=['Float64'])
@@ -248,26 +242,26 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                     )
                 .pipe(multiply_floats_by_1000000)
                 .pipe(insert_jobdata, df_job)
-                .join(Series(dtype='Int64', name='task_id'))
-                .join(Series(dtype='Int64', name='app_id'))
-                .join(Series(dtype='Int64', name='gpu_power'))
-                .join(Series(dtype='Int64', name='gpu_freq'))
-                .join(Series(dtype='Int64', name='gpu_mem_freq'))
-                .join(Series(dtype='Int64', name='gpu_util'))
-                .join(Series(dtype='Int64', name='gpu_mem_util'))
-                .join(Series(dtype='Int64', name='gpu_gflops'))
-                .join(Series(dtype='Int64', name='dcgm_gr_engine_active'))
-                .join(Series(dtype='Int64', name='dcgm_sm_active'))
-                .join(Series(dtype='Int64', name='dcgm_sm_occupancy'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_tensor_active'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_fp64_active'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_fp32_active'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_fp16_active'))
-                .join(Series(dtype='Int64', name='dcgm_dram_active'))
-                .join(Series(dtype='Int64', name='dcgm_nvlink_tx_bytes'))
-                .join(Series(dtype='Int64', name='dcgm_nvlink_rx_bytes'))
-                .join(Series(dtype='Int64', name='dcgm_pcie_tx_bytes'))
-                .join(Series(dtype='Int64', name='dcgm_pcie_rx_bytes'))
+                .join(pd.Series(dtype='Int64', name='task_id'))
+                .join(pd.Series(dtype='Int64', name='app_id'))
+                .join(pd.Series(dtype='Int64', name='gpu_power'))
+                .join(pd.Series(dtype='Int64', name='gpu_freq'))
+                .join(pd.Series(dtype='Int64', name='gpu_mem_freq'))
+                .join(pd.Series(dtype='Int64', name='gpu_util'))
+                .join(pd.Series(dtype='Int64', name='gpu_mem_util'))
+                .join(pd.Series(dtype='Int64', name='gpu_gflops'))
+                .join(pd.Series(dtype='Int64', name='dcgm_gr_engine_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_sm_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_sm_occupancy'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_tensor_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_fp64_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_fp32_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_fp16_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_dram_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_nvlink_tx_bytes'))
+                .join(pd.Series(dtype='Int64', name='dcgm_nvlink_rx_bytes'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pcie_tx_bytes'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pcie_rx_bytes'))
                 )
     # print(df_loops.info())
 
@@ -288,9 +282,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                          time=lambda df: (df.Timestamp -
                                           df.start_time) * 1000000,
                      )
-                     .join(Series(dtype='Int64', name='task_id'))
-                     .join(Series(dtype='Int64', name='app_id'))
-                     .join(Series(dtype='Int64', name='event_type'))
+                     .join(pd.Series(dtype='Int64', name='task_id'))
+                     .join(pd.Series(dtype='Int64', name='app_id'))
+                     .join(pd.Series(dtype='Int64', name='event_type'))
                      # Drop unnecessary columns
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
@@ -314,14 +308,14 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
     #
     # #### Generic info of the trace file
 
-    node_info = np.sort(unique(df_loops.NODENAME))
+    node_info = np.sort(pd.unique(df_loops.NODENAME))
     n_nodes = 0
 
     if df_events is not None and not \
-            np.array_equal(node_info, np.sort(unique(df_events.node_id))):
+            np.array_equal(node_info, np.sort(pd.unique(df_events.node_id))):
         print('ERROR: Loops and events data do not have'
               f' the same node information: {node_info}, '
-              f'{np.sort(unique(df_events.node_id))}')
+              f'{np.sort(pd.unique(df_events.node_id))}')
         return
     else:
         n_nodes = node_info.size
@@ -376,14 +370,14 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                           (df_loops['STEPID'] == app_step) &
                           (df_loops['APPID'] == app_appid)]
 
-        appl_nodes = np.sort(unique(df_app.NODENAME))
+        appl_nodes = np.sort(pd.unique(df_app.NODENAME))
 
         if df_events is not None:
             # Used only to check whether data correspond to the same Job-Step
             df_events_app = df_events[(df_events['Job_id'] == app_job) &
                                       (df_events['Step_id'] == app_step)]
             if not np.array_equal(appl_nodes,
-                                  np.sort(unique(df_events_app.node_id))):
+                                  np.sort(pd.unique(df_events_app.node_id))):
                 print('ERROR: Loops and events data do not have'
                       ' the same node information.')
                 return
@@ -644,7 +638,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
         ear_events_id_off = max(metric_event_typ_map.values()) + 1
 
         # Get all EAR events types
-        events_info = unique(df_events.Event_type)
+        events_info = pd.unique(df_events.Event_type)
 
         for event_idx, event_t in enumerate(events_info):
 
@@ -678,9 +672,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
 
         # We use the heapq merge function where the key is the
         # time field (position 5) of the trace row.
-        file_trace_body = '\n'.join(merge(body_list_sorted,
-                                          ear_events_body_list,
-                                          key=lambda x: x.split(sep=':')[5])
+        file_trace_body = '\n'.join(heapq.merge(body_list_sorted,
+                                    ear_events_body_list,
+                                    key=lambda x: x.split(sep=':')[5])
                                     )
     else:
         file_trace_body = '\n'.join(body_list_sorted)
@@ -764,7 +758,7 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
         exit()
 
     # Run the command
-    res = run(cmd, stdout=PIPE, stderr=PIPE)
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Check the possible errors
     if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
@@ -784,7 +778,7 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
     if ear_events:
         cmd = ["eacct", "-j", job_fmt, "-x", '-c',
                '.'.join(['events', csv_file])]
-        res = run(cmd, stdout=PIPE, stderr=PIPE)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Return generated file
     return csv_file
