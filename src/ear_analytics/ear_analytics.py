@@ -35,6 +35,7 @@ from .utils import (filter_df, read_job_data_config, read_loop_data_config,
 
 from . import ear_data as edata
 from . import static_figures
+from . import paraver
 from . import io_api
 
 from .events import read_events_configuration
@@ -141,8 +142,8 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
             #     fig.show()
 
 
-def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
-            events_config, events_data_fn=None, job_id=None, step_id=None,
+def ear2prv(job_data_fn, loop_data_fn, loop_data_config,
+            events_config, config_fn, events_data_fn=None, job_id=None, step_id=None,
             output_fn=None, events_config_fn=None):
 
     def filter_df_columns(df, cols_config):
@@ -223,9 +224,13 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
         print(df)
         return df
 
-    # Read the Job data
+    # Read the ear2prv config
+    ear2prv_config = paraver.ear2prv_config(config_fn)
 
-    df_job = (read_data(job_data_fn, sep=';')
+    # Read the Job data
+    job_data_config = paraver.ear2prv_job_config(ear2prv_config)
+
+    df_job = (io_api.read_data(job_data_fn, sep=';')
               .pipe(filter_df, JOBID=job_id, id=job_id,
                     STEPID=step_id, step_id=step_id)
               .pipe(filter_df_columns, job_data_config)
@@ -233,7 +238,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
               )
 
     # Read the Loop data
-    df_loops = (read_data(loop_data_fn, sep=';')
+    df_loops = (io_api.read_data(loop_data_fn, sep=';')
                 .pipe(filter_df, JOBID=job_id, STEPID=step_id)
                 .pipe(filter_df_columns, loop_data_config)
                 .pipe(set_df_types, loop_data_config)
@@ -277,7 +282,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
         cols_dict = {'JOBID': 'Job_id', 'STEPID': 'Step_id'}
 
         # By now events are in a space separated csv file.
-        df_events = (read_data(events_data_fn, sep=r'\s+')
+        df_events = (io_api.read_data(events_data_fn, sep=r'\s+')
                      .pipe(filter_df, Job_id=job_id, Step_id=step_id)
                      .merge(df_job.rename(columns=cols_dict))
                      .assign(
@@ -844,9 +849,9 @@ def parser_action(args):
 
         # Call ear2prv format method
         ear2prv(args.apps_file, args.loops_file,
-                read_job_data_config(config_file_path),
                 read_loop_data_config(config_file_path),
                 read_events_configuration(config_file_path),
+                config_file_path,
                 events_data_fn=events_data_path, job_id=args.job_id,
                 step_id=args.step_id, output_fn=args.output)
 
