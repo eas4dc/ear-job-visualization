@@ -50,13 +50,13 @@ def read_data(file_path, **kwargs):
                                ignore_index=True)
         else:
             print(f'{file_path} does not exist!')
-            raise FileNotFoundError
+            return data_f
     elif isinstance(file_path, list):
         # `file_path` is a list containing files
         try:
             no_exists_file = next(dropwhile(os.path.exists, file_path))
             print(f'file {no_exists_file} does not exist!')
-            raise FileNotFoundError
+            return data_f
         except StopIteration:
             print(f'reading files {file_path}')
             data_f = pd.concat(load_files(file_path), ignore_index=True)
