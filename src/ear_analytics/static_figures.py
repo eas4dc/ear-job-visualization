@@ -72,6 +72,7 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, step,
             Default: node.
         - metric_display_name: Specify how the metric name must be displayed.
             Default: ''.
+        - gpu_metrics_re: A regex to find GPU columns.
 
     Returns: A figure.
 
@@ -113,9 +114,10 @@ def generate_metric_timeline_fig(df, app_start_time, app_end_time, metric, step,
     norm = build_gradient_norm(m_data_array, step,
                                kwargs.get('v_min', None),
                                kwargs.get('v_max', None))
-    gpu_metric_regex = re.compile((r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                                   r'UTIL_PERC|MEM_UTIL_PERC|'
-                                   r'(10[01][0-9]))'))
+    # gpu_metric_regex = re.compile((r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
+    #                                r'UTIL_PERC|MEM_UTIL_PERC|'
+    #                                r'(10[01][0-9]))'))
+    gpu_metric_regex = re.compile(kwargs.get('gpu_metrics_re', ''))
 
     for i, _ in enumerate(m_data_array):
         if granularity != 'app':

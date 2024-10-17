@@ -18,7 +18,7 @@ def read_metrics_configuration(filename):
     Return metrics configuration stored in `filename`,
     which is a file in JSON format.
     """
-    return read_configuration(filename)['metrics']
+    return read_configuration(filename)['columns']['metrics']
 
 
 def metric_regex(metric, metrics_conf):

@@ -34,8 +34,6 @@ from importlib_resources import files
 
 from itertools import chain
 
-from .io_api import read_data, print_configuration
-
 from .metrics import (metric_regex, metric_step, read_metrics_configuration,
                       get_plottable_metrics)
 
@@ -44,6 +42,7 @@ from .utils import (filter_df, read_job_data_config, read_loop_data_config,
 
 from . import ear_data as edata
 from . import static_figures
+from . import io_api
 
 from .phases import (read_phases_configuration,
                      df_phases_phase_time_ratio,
@@ -58,7 +57,7 @@ def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
     fig.savefig(fig_fn)
 
 
-def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
+def runtime(filename, out_jobs_fn, req_metrics, config_fn,
             rel_range=True, title=None, job_id=None, step_id=None,
             output=None):
     """
@@ -68,14 +67,14 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
     It also receives the `filename` to read data from,
     and `avail_metrics` supported.
     """
-
+    avail_metrics = read_metrics_configuration(config_fn)
     try:
-        df = (read_data(filename, sep=';')
+        df = (io_api.read_data(filename, sep=';')
               .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-              .pipe(edata.filter_invalid_gpu_series)
+              .pipe(edata.filter_invalid_gpu_series, config_fn)
               .pipe(edata.df_gpu_node_metrics, config_fn)
               )
-        df_job = (read_data(out_jobs_fn, sep=';')
+        df_job = (io_api.read_data(out_jobs_fn, sep=';')
                   .pipe(filter_df, JOBID=job_id, STEPID=step_id,
                         id=job_id, step_id=step_id))
     except FileNotFoundError as e:
@@ -83,8 +82,13 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
         return
     else:
         # We need the application start time
-        app_start_time = df_job.START_TIME.min()
-        app_end_time = df_job.END_TIME.max()
+        configuration = io_api.read_configuration(config_fn)
+
+        start_time_col = configuration['columns']['app_info']['start_time']
+        app_start_time = df_job[start_time_col].min()
+        
+        end_time_col = configuration['columns']['app_info']['end_time']
+        app_end_time = df_job[end_time_col].max()
 
         for metric in req_metrics:
             # Get a valid EAR column name
@@ -113,13 +117,15 @@ def runtime(filename, out_jobs_fn, avail_metrics, req_metrics, config_fn,
                     if step_id is not None:
                         fig_title = '-'.join([fig_title, str(step_id)])
 
+            gpu_metrics_re = configuration['columns']['gpu_data']['gpu_columns_re']
             fig = static_figures.generate_metric_timeline_fig(df, app_start_time,
                                                        app_end_time,
                                                        metric_name, step,
                                                        v_min=v_min,
                                                        v_max=v_max,
                                                        fig_title=fig_title,
-                                                       metric_display_name=disply_name)
+                                                       metric_display_name=disply_name,
+                                                       gpu_metrics_re=gpu_metrics_re)
 
             # if save:
             name = f'runtime_{metric}'
@@ -803,7 +809,7 @@ def parser_action(args):
 
     # Print configuration file
     if args.print_config == True:
-        print_configuration(config_file_path)
+        io_api.print_configuration(config_file_path)
         return
 
     print(f'Using {config_file_path} as configuration file...')
@@ -845,7 +851,6 @@ def parser_action(args):
     if args.format == "runtime":
 
         runtime(args.input_file, out_jobs_path,
-                read_metrics_configuration(config_file_path),
                 args.metrics, config_file_path, args.manual_range,
                 args.title, args.job_id, args.step_id, args.output)
 
