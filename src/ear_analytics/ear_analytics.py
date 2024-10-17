@@ -58,87 +58,86 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
     and `avail_metrics` supported.
     """
     avail_metrics = read_metrics_configuration(config_fn)
-    try:
-        df = (io_api.read_data(filename, sep=';')
-              .pipe(filter_df, JOBID=job_id, STEPID=step_id, JID=job_id)
-              .pipe(edata.filter_invalid_gpu_series, config_fn)
-              .pipe(edata.df_gpu_node_metrics, config_fn)
-              )
-        df_job = (io_api.read_data(out_jobs_fn, sep=';')
-                  .pipe(filter_df, JOBID=job_id, STEPID=step_id,
-                        id=job_id, step_id=step_id))
-    except FileNotFoundError as e:
-        print(e)
-        return
-    else:
-        # We need the application start time
-        configuration = io_api.read_configuration(config_fn)
 
-        start_time_col = configuration['columns']['app_info']['start_time']
-        app_start_time = df_job[start_time_col].min()
-        
-        end_time_col = configuration['columns']['app_info']['end_time']
-        app_end_time = df_job[end_time_col].max()
+    df = (io_api.read_data(filename, sep=';')
+          .pipe(filter_df, JOBID=job_id, STEPID=step_id)
+          .pipe(edata.filter_invalid_gpu_series, config_fn)
+          .pipe(edata.df_gpu_node_metrics, config_fn)
+          )
+    df_job = (io_api.read_data(out_jobs_fn, sep=';')
+              .pipe(filter_df, JOBID=job_id, STEPID=step_id,
+                    id=job_id, step_id=step_id))
+    if df.empty is True or df_job.empty is True:
+        sys.exit('Either loop or app data is empty.')
 
-        for metric in req_metrics:
-            # Get a valid EAR column name
-            metric_config = avail_metrics[metric]
+    # We need the application start time
+    configuration = io_api.read_configuration(config_fn)
 
-            metric_name = metric_config['column_name']
-            dsply_nm = metric_config.get('display_name', metric_name)
-            step = metric_config['step']
+    start_time_col = configuration['columns']['app_info']['start_time']
+    app_start_time = df_job[start_time_col].min()
 
-            # Set the configured normalization if requested.
-            v_min = None
-            v_max = None
-            if not rel_range:
-                metric_range = metric_config['range']
-                print(f"Configured metric range: {metric_range}")
-                v_min = metric_range[0]
-                v_max = metric_range[1]
+    end_time_col = configuration['columns']['app_info']['end_time']
+    app_end_time = df_job[end_time_col].max()
 
-            # TODO: Add the min/max value of the metric (relative range always)
-            fig_title = metric
-            if title:  # We preserve the title got by the user
-                fig_title = f'{title}: {metric}'
-            else:  # The default title: %metric-%job_id-%step_id
-                if job_id:
-                    fig_title = '-'.join([fig_title, str(job_id)])
-                    if step_id is not None:
-                        fig_title = '-'.join([fig_title, str(step_id)])
+    for metric in req_metrics:
+        # Get a valid EAR column name
+        metric_config = avail_metrics[metric]
 
-            gpu_metrics_re = configuration['columns']['gpu_data']['gpu_columns_re']
-            fig = (static_figures
-                   .generate_metric_timeline_fig(df, app_start_time,
-                                                 app_end_time,
-                                                 metric_name, step,
-                                                 v_min=v_min,
-                                                 v_max=v_max,
-                                                 fig_title=fig_title,
-                                                 metric_display_name=dsply_nm,
-                                                 gpu_metrics_re=gpu_metrics_re))
+        metric_name = metric_config['column_name']
+        dsply_nm = metric_config.get('display_name', metric_name)
+        step = metric_config['step']
 
-            # if save:
-            name = f'runtime_{metric}'
-            """
+        # Set the configured normalization if requested.
+        v_min = None
+        v_max = None
+        if not rel_range:
+            metric_range = metric_config['range']
+            print(f"Configured metric range: {metric_range}")
+            v_min = metric_range[0]
+            v_max = metric_range[1]
+
+        # TODO: Add the min/max value of the metric (relative range always)
+        fig_title = metric
+        if title:  # We preserve the title got by the user
+            fig_title = f'{title}: {metric}'
+        else:  # The default title: %metric-%job_id-%step_id
             if job_id:
-                name = '-'.join([name, str(job_id)])
+                fig_title = '-'.join([fig_title, str(job_id)])
                 if step_id is not None:
-                    name = '-'.join([name, str(step_id)])
-            """
+                    fig_title = '-'.join([fig_title, str(step_id)])
 
-            if output:
-                if path.isdir(output):
+        gpu_metrics_re = configuration['columns']['gpu_data']['gpu_columns_re']
+        fig = (static_figures
+               .generate_metric_timeline_fig(df, app_start_time,
+                                             app_end_time,
+                                             metric_name, step,
+                                             v_min=v_min,
+                                             v_max=v_max,
+                                             fig_title=fig_title,
+                                             metric_display_name=dsply_nm,
+                                             gpu_metrics_re=gpu_metrics_re))
 
-                    name = path.join(output, name)
-                else:
-                    name = '-'.join([name, output])
+        # if save:
+        name = f'runtime_{metric}'
+        """
+        if job_id:
+            name = '-'.join([name, str(job_id)])
+            if step_id is not None:
+                name = '-'.join([name, str(step_id)])
+        """
 
-            print(f'storing figure {name}')
+        if output:
+            if path.isdir(output):
 
-            fig.savefig(name, dpi='figure', bbox_inches='tight')
-            # else:
-            #     fig.show()
+                name = path.join(output, name)
+            else:
+                name = '-'.join([name, output])
+
+        print(f'storing figure {name}')
+
+        fig.savefig(name, dpi='figure', bbox_inches='tight')
+        # else:
+        #     fig.show()
 
 
 def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
@@ -805,7 +804,7 @@ def parser_action(args):
         config_file_path = files('ear_analytics').joinpath('config.json')
 
     # Print configuration file
-    if args.print_config == True:
+    if args.print_config is True:
         io_api.print_configuration(config_file_path)
         sys.exit()
 
