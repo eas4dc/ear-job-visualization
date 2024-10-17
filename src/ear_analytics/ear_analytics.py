@@ -14,28 +14,21 @@
 
 import sys
 from argparse import HelpFormatter, ArgumentParser
-from os import mkdir, path, system
-from subprocess import run, PIPE, STDOUT, CalledProcessError
+from os import path, system
+import subprocess
 from time import strftime, localtime
 import re
 
 import numpy as np
 
-from pandas import to_datetime, date_range, Series, unique, DataFrame, concat
-from pylatex import Command
-
-from heapq import merge
-
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import ImageGrid
+import pandas as pd
+import heapq
 
 from importlib_resources import files
 
 from itertools import chain
 
-from .metrics import (metric_regex, metric_step, read_metrics_configuration,
-                      get_plottable_metrics)
+from .metrics import read_metrics_configuration, get_plottable_metrics
 
 from .utils import (filter_df, read_job_data_config, read_loop_data_config,
                     function_compose)
@@ -44,16 +37,13 @@ from . import ear_data as edata
 from . import static_figures
 from . import io_api
 
-from .phases import (read_phases_configuration,
-                     df_phases_phase_time_ratio,
-                     df_phases_to_tex_tabular)
-
 from .events import read_events_configuration
 
 
 def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
-    fig = static_figures.generate_metric_timeline_fig(df, metric, step, fig_title=fig_title,
-                                               **kwargs)
+    fig = static_figures.generate_metric_timeline_fig(df, metric, step,
+                                                      fig_title=fig_title,
+                                                      **kwargs)
     fig.savefig(fig_fn)
 
 
@@ -95,7 +85,7 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
             metric_config = avail_metrics[metric]
 
             metric_name = metric_config['column_name']
-            disply_name = metric_config.get('display_name', metric_name)
+            dsply_nm = metric_config.get('display_name', metric_name)
             step = metric_config['step']
 
             # Set the configured normalization if requested.
@@ -118,14 +108,15 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
                         fig_title = '-'.join([fig_title, str(step_id)])
 
             gpu_metrics_re = configuration['columns']['gpu_data']['gpu_columns_re']
-            fig = static_figures.generate_metric_timeline_fig(df, app_start_time,
-                                                       app_end_time,
-                                                       metric_name, step,
-                                                       v_min=v_min,
-                                                       v_max=v_max,
-                                                       fig_title=fig_title,
-                                                       metric_display_name=disply_name,
-                                                       gpu_metrics_re=gpu_metrics_re)
+            fig = (static_figures
+                   .generate_metric_timeline_fig(df, app_start_time,
+                                                 app_end_time,
+                                                 metric_name, step,
+                                                 v_min=v_min,
+                                                 v_max=v_max,
+                                                 fig_title=fig_title,
+                                                 metric_display_name=dsply_nm,
+                                                 gpu_metrics_re=gpu_metrics_re))
 
             # if save:
             name = f'runtime_{metric}'
@@ -165,7 +156,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
         """
         Returns df with types set by cols_config
         """
-        ret_df = DataFrame(index=df.index)
+        ret_df = pd.DataFrame(index=df.index)
         dfs = [(df
                 .filter(regex=regex)
                 .pipe(lambda df: df.astype(cols_config[regex])
@@ -206,13 +197,13 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                       f"step {s} app {a}. This job-step-app won't be on the "
                       "output trace.")
 
-        df_start_time = (DataFrame({'JOBID': jobs, 'STEPID': steps,
-                                    'APPID': apps, 'NODENAME': nodes,
-                                    'TIMESTAMP': times},
-                                   columns=df_loops.columns)
+        df_start_time = (pd.DataFrame({'JOBID': jobs, 'STEPID': steps,
+                                       'APPID': apps, 'NODENAME': nodes,
+                                       'TIMESTAMP': times},
+                                      columns=df_loops.columns)
                          .fillna(0))
 
-        return concat([df_loops, df_start_time], ignore_index=True)
+        return pd.concat([df_loops, df_start_time], ignore_index=True)
 
     def multiply_floats_by_1000000(df):
         df_floats = (df.select_dtypes(include=['Float64'])
@@ -254,26 +245,26 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                     )
                 .pipe(multiply_floats_by_1000000)
                 .pipe(insert_jobdata, df_job)
-                .join(Series(dtype='Int64', name='task_id'))
-                .join(Series(dtype='Int64', name='app_id'))
-                .join(Series(dtype='Int64', name='gpu_power'))
-                .join(Series(dtype='Int64', name='gpu_freq'))
-                .join(Series(dtype='Int64', name='gpu_mem_freq'))
-                .join(Series(dtype='Int64', name='gpu_util'))
-                .join(Series(dtype='Int64', name='gpu_mem_util'))
-                .join(Series(dtype='Int64', name='gpu_gflops'))
-                .join(Series(dtype='Int64', name='dcgm_gr_engine_active'))
-                .join(Series(dtype='Int64', name='dcgm_sm_active'))
-                .join(Series(dtype='Int64', name='dcgm_sm_occupancy'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_tensor_active'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_fp64_active'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_fp32_active'))
-                .join(Series(dtype='Int64', name='dcgm_pipe_fp16_active'))
-                .join(Series(dtype='Int64', name='dcgm_dram_active'))
-                .join(Series(dtype='Int64', name='dcgm_nvlink_tx_bytes'))
-                .join(Series(dtype='Int64', name='dcgm_nvlink_rx_bytes'))
-                .join(Series(dtype='Int64', name='dcgm_pcie_tx_bytes'))
-                .join(Series(dtype='Int64', name='dcgm_pcie_rx_bytes'))
+                .join(pd.Series(dtype='Int64', name='task_id'))
+                .join(pd.Series(dtype='Int64', name='app_id'))
+                .join(pd.Series(dtype='Int64', name='gpu_power'))
+                .join(pd.Series(dtype='Int64', name='gpu_freq'))
+                .join(pd.Series(dtype='Int64', name='gpu_mem_freq'))
+                .join(pd.Series(dtype='Int64', name='gpu_util'))
+                .join(pd.Series(dtype='Int64', name='gpu_mem_util'))
+                .join(pd.Series(dtype='Int64', name='gpu_gflops'))
+                .join(pd.Series(dtype='Int64', name='dcgm_gr_engine_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_sm_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_sm_occupancy'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_tensor_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_fp64_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_fp32_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pipe_fp16_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_dram_active'))
+                .join(pd.Series(dtype='Int64', name='dcgm_nvlink_tx_bytes'))
+                .join(pd.Series(dtype='Int64', name='dcgm_nvlink_rx_bytes'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pcie_tx_bytes'))
+                .join(pd.Series(dtype='Int64', name='dcgm_pcie_rx_bytes'))
                 )
     # print(df_loops.info())
 
@@ -294,9 +285,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                          time=lambda df: (df.Timestamp -
                                           df.start_time) * 1000000,
                      )
-                     .join(Series(dtype='Int64', name='task_id'))
-                     .join(Series(dtype='Int64', name='app_id'))
-                     .join(Series(dtype='Int64', name='event_type'))
+                     .join(pd.Series(dtype='Int64', name='task_id'))
+                     .join(pd.Series(dtype='Int64', name='app_id'))
+                     .join(pd.Series(dtype='Int64', name='event_type'))
                      # Drop unnecessary columns
                      .drop(['Event_ID', 'Timestamp',
                             'start_time', 'end_time'], axis=1)
@@ -320,14 +311,14 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
     #
     # #### Generic info of the trace file
 
-    node_info = np.sort(unique(df_loops.NODENAME))
+    node_info = np.sort(pd.unique(df_loops.NODENAME))
     n_nodes = 0
 
     if df_events is not None and not \
-            np.array_equal(node_info, np.sort(unique(df_events.node_id))):
+            np.array_equal(node_info, np.sort(pd.unique(df_events.node_id))):
         print('ERROR: Loops and events data do not have'
               f' the same node information: {node_info}, '
-              f'{np.sort(unique(df_events.node_id))}')
+              f'{np.sort(pd.unique(df_events.node_id))}')
         return
     else:
         n_nodes = node_info.size
@@ -382,14 +373,14 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                           (df_loops['STEPID'] == app_step) &
                           (df_loops['APPID'] == app_appid)]
 
-        appl_nodes = np.sort(unique(df_app.NODENAME))
+        appl_nodes = np.sort(pd.unique(df_app.NODENAME))
 
         if df_events is not None:
             # Used only to check whether data correspond to the same Job-Step
             df_events_app = df_events[(df_events['Job_id'] == app_job) &
                                       (df_events['Step_id'] == app_step)]
             if not np.array_equal(appl_nodes,
-                                  np.sort(unique(df_events_app.node_id))):
+                                  np.sort(pd.unique(df_events_app.node_id))):
                 print('ERROR: Loops and events data do not have'
                       ' the same node information.')
                 return
@@ -439,13 +430,14 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                               (df_events['node_id'] == node_name), 'task_id'] \
                     = np.int64(node_idx + 1)
 
-            task_lvl_names = '\n'.join([task_lvl_names,
-                                        f'({app_job}.{app_step}.{app_appid}) @ {node_name}'])
+            task_fmt = f'({app_job}.{app_step}.{app_appid}) @ {node_name}'
+            task_lvl_names = '\n'.join([task_lvl_names, task_fmt])
 
             # THREAD NAMES
             for gpu_idx in range(n_threads):
-                (thread_lvl_names
-                 .append(f'({app_job}.{app_step}.{app_appid}) GPU {gpu_idx} @ {node_name}'))
+                thread_fmt = (f'({app_job}.{app_step}.{app_appid}) '
+                              f'GPU {gpu_idx} @ {node_name}')
+                thread_lvl_names.append(thread_fmt)
 
         # APPL level names
         appl_lvl_names = '\n'.join([appl_lvl_names,
@@ -492,13 +484,18 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                                       'time', 'task_id', 'app_id', 'JOBNAME',
                                       'gpu_power', 'gpu_freq', 'gpu_mem_freq',
                                       'gpu_util', 'gpu_mem_util', 'gpu_gflops',
-                                      'dcgm_gr_engine_active', 'dcgm_sm_active',
-                                      'dcgm_sm_occupancy', 'dcgm_pipe_tensor_active',
-                                      'dcgm_pipe_fp64_active', 'dcgm_pipe_fp32_active',
-                                      'dcgm_pipe_fp16_active', 'dcgm_dram_active',
-                                      'dcgm_nvlink_tx_bytes', 'dcgm_nvlink_rx_bytes',
-                                      'dcgm_pcie_tx_bytes', 'dcgm_pcie_rx_bytes',
-                                      'TIMESTAMP', 'START_TIME', 'END_TIME']
+                                      'dcgm_gr_engine_active',
+                                      'dcgm_sm_active', 'dcgm_sm_occupancy',
+                                      'dcgm_pipe_tensor_active',
+                                      'dcgm_pipe_fp64_active',
+                                      'dcgm_pipe_fp32_active',
+                                      'dcgm_pipe_fp16_active',
+                                      'dcgm_dram_active',
+                                      'dcgm_nvlink_tx_bytes',
+                                      'dcgm_nvlink_rx_bytes',
+                                      'dcgm_pcie_tx_bytes',
+                                      'dcgm_pcie_rx_bytes', 'TIMESTAMP',
+                                      'START_TIME', 'END_TIME']
                              ).columns
                )
 
@@ -514,28 +511,30 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
     timestamp_idx = columns.get_loc('time')
 
     gpu_field_regex = re.compile(r'GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
-                                 r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS|gr_engine_active|'
-                                 r'sm_active|sm_occupancy|tensor_active|fp64_active|'
-                                 r'fp32_active|fp16_active|dram_active|nvlink_tx_bytes|'
-                                 r'nvlink_rx_bytes|pcie_tx_bytes|pcie_rx_bytes)')
+                                 r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS|'
+                                 r'gr_engine_active|sm_active|sm_occupancy|'
+                                 r'tensor_active|fp64_active|fp32_active|'
+                                 r'fp16_active|dram_active|nvlink_tx_bytes|'
+                                 r'nvlink_rx_bytes|pcie_tx_bytes|'
+                                 r'pcie_rx_bytes)')
     gpu_field_map = {'POWER_W': 'gpu_power',
                      'FREQ_KHZ': 'gpu_freq',
                      'MEM_FREQ_KHZ': 'gpu_mem_freq',
                      'UTIL_PERC': 'gpu_util',
                      'MEM_UTIL_PERC': 'gpu_mem_util',
                      'GFLOPS': 'gpu_gflops',
-                     'gr_engine_active' : 'dcgm_gr_engine_active',
-                     'sm_active' : 'dcgm_sm_active',
-                     'sm_occupancy' : 'dcgm_sm_occupancy',
-                     'tensor_active' : 'dcgm_pipe_tensor_active',
-                     'fp64_active' : 'dcgm_pipe_fp64_active',
-                     'fp32_active' : 'dcgm_pipe_fp32_active',
-                     'fp16_active' : 'dcgm_pipe_fp16_active',
-                     'dram_active' : 'dcgm_dram_active',
-                     'nvlink_tx_bytes' : 'dcgm_nvlink_tx_bytes',
-                     'nvlink_rx_bytes' : 'dcgm_nvlink_rx_bytes',
-                     'pcie_tx_bytes' : 'dcgm_pcie_tx_bytes',
-                     'pcie_rx_bytes' : 'dcgm_pcie_rx_bytes'
+                     'gr_engine_active': 'dcgm_gr_engine_active',
+                     'sm_active': 'dcgm_sm_active',
+                     'sm_occupancy': 'dcgm_sm_occupancy',
+                     'tensor_active': 'dcgm_pipe_tensor_active',
+                     'fp64_active': 'dcgm_pipe_fp64_active',
+                     'fp32_active': 'dcgm_pipe_fp32_active',
+                     'fp16_active': 'dcgm_pipe_fp16_active',
+                     'dram_active': 'dcgm_dram_active',
+                     'nvlink_tx_bytes': 'dcgm_nvlink_tx_bytes',
+                     'nvlink_rx_bytes': 'dcgm_nvlink_rx_bytes',
+                     'pcie_tx_bytes': 'dcgm_pcie_tx_bytes',
+                     'pcie_rx_bytes': 'dcgm_pcie_rx_bytes'
                      }
 
     body_list = []
@@ -565,12 +564,12 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
 
     cols_regex = re.compile(r'(GPU(\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|'
                             r'UTIL_PERC|MEM_UTIL_PERC|GFLOPS|gr_engine_active|'
-                            r'sm_active|sm_occupancy|tensor_active|fp64_active|'
-                            r'fp32_active|fp16_active|dram_active|nvlink_tx_bytes|'
-                            r'nvlink_rx_bytes|pcie_tx_bytes|pcie_rx_bytes))'
-                            r'|JOBID|STEPID|NODENAME|LOOPID|LOOP_NEST_LEVEL|'
-                            r'LOOP_SIZE|TIMESTAMP|START_TIME|END_TIME|time|'
-                            r'task_id|app_id|JOBNAME|APPID')
+                            r'sm_active|sm_occupancy|tensor_active|'
+                            r'fp64_active|fp32_active|fp16_active|dram_active|'
+                            r'nvlink_tx_bytes|nvlink_rx_bytes|pcie_tx_bytes|'
+                            r'pcie_rx_bytes))|JOBID|STEPID|NODENAME|LOOPID|'
+                            r'LOOP_NEST_LEVEL|LOOP_SIZE|TIMESTAMP|START_TIME|'
+                            r'END_TIME|time|task_id|app_id|JOBNAME|APPID')
     metrics = (df_loops
                .drop(columns=df_loops.filter(regex=cols_regex).columns)
                .columns)
@@ -587,7 +586,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
                  .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
                  .assign(state_id=1,  # 1 -> Running
                          START_TIME=lambda df: (df.START_TIME - df_job.START_TIME.min()) * 1000000,
-                         END_TIME=lambda df: (df.END_TIME -  df_job.START_TIME.min()) * 1000000)
+                         END_TIME=lambda df: (df.END_TIME - df_job.START_TIME.min()) * 1000000)
                  .reset_index())
 
     smft = '1:0:{app_id}:{task_id}:1:{START_TIME}:{END_TIME}:{state_id}'.format
@@ -650,7 +649,7 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
         ear_events_id_off = max(metric_event_typ_map.values()) + 1
 
         # Get all EAR events types
-        events_info = unique(df_events.Event_type)
+        events_info = pd.unique(df_events.Event_type)
 
         for event_idx, event_t in enumerate(events_info):
 
@@ -684,9 +683,9 @@ def ear2prv(job_data_fn, loop_data_fn, job_data_config, loop_data_config,
 
         # We use the heapq merge function where the key is the
         # time field (position 5) of the trace row.
-        file_trace_body = '\n'.join(merge(body_list_sorted,
-                                          ear_events_body_list,
-                                          key=lambda x: x.split(sep=':')[5])
+        file_trace_body = '\n'.join(heapq.merge(body_list_sorted,
+                                    ear_events_body_list,
+                                    key=lambda x: x.split(sep=':')[5])
                                     )
     else:
         file_trace_body = '\n'.join(body_list_sorted)
@@ -742,8 +741,8 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
     to get files to be worked by `result_format` feature.
 
     The filename where data is stored is "tmp_<jobid>[_<stepid>].csv", which is
-    returned as str. '_<stepid>' region depends on whether `stepid` parameter is not
-    None.
+    returned as str. '_<stepid>' region depends on whether `stepid` parameter
+    is not None.
 
     Basic command for each format:
         runtime -> -r -o -> Generates [out_jobs.]tmp_<jobid>[_<stepid>].csv
@@ -752,48 +751,46 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
 
     If the requested format is "summary" or `ear_events` is True, an
     additional call is done requesting for events, i.e., `eacct -x`.
-    The resulting filename is "events.tmp_<jobid>[_<stepid>].csv", but note that
-    the function is still returning the basic command filename.
+    The resulting filename is "events.tmp_<jobid>[_<stepid>].csv", but note
+    that the function is still returning the basic command filename.
     """
 
     if stepid is None:
-        csv_file = f'tmp_{jobid}.csv'
+        csv_loops_file = f'tmp_{jobid}_loops.csv'
+        csv_apps_file = f'tmp_{jobid}_apps.csv'
         job_fmt = f'{jobid}'
     else:
-        csv_file = f'tmp_{jobid}_{stepid}.csv'
+        csv_loops_file = f'tmp_{jobid}_{stepid}_loops.csv'
+        csv_apps_file = f'tmp_{jobid}_{stepid}_apps.csv'
         job_fmt = f'{jobid}.{stepid}'
 
     if result_format == 'runtime' or result_format == "ear2prv":
-        cmd = ["eacct", "-j", job_fmt, "-r", "-o", "-c", csv_file]
+        cmd_loops = ["eacct", "-j", job_fmt, "-r", "-c", csv_loops_file]
+        cmd_apps = ["eacct", "-j", job_fmt, "-l", "-c", csv_apps_file]
+
+        # Run the command
+        try:
+            res_loops = subprocess.run(cmd_loops, capture_output=True,
+                                       check=True)
+            res_apps = subprocess.run(cmd_apps, capture_output=True,
+                                      check=True)
+        except subprocess.CalledProcessError as check_failed:
+            sys.exit(f'Command `{check_failed.cmd}` returned an error: '
+                     f'{check_failed.stderr.decode("utf-8")}')
+        except OSError as os_error:
+            sys.exit(f'OS returned an error: ({os_error.errno})'
+                     f' {os_error.strerror}: "{os_error.filename}"')
+        else:
+            print(f'{res_loops.args} ran successfully:'
+                  f'\n{res_loops.stdout.decode("utf-8")}')
+
+            print(f'{res_apps.args} ran successfully:'
+                  f'\n{res_apps.stdout.decode("utf-8")}')
+
+            # Return generated file
+            return csv_loops_file, csv_apps_file
     else:
-        print("Unrecognized format: Please contact with support@eas4dc.com")
-        exit()
-
-    # Run the command
-    res = run(cmd, stdout=PIPE, stderr=PIPE)
-
-    # Check the possible errors
-    if "Error getting ear.conf path" in res.stderr.decode('utf-8'):
-        print("Error getting ear.conf path")
-        exit()
-
-    if "No jobs found" in res.stdout.decode('utf-8'):
-        print(f"eacct: {jobid} No jobs found.")
-        exit()
-
-    if "No loops retrieved" in res.stdout.decode('utf-8'):
-        print("eacct:", job_fmt, "No loops retrieved")
-        exit()
-
-    # Request EAR events
-
-    if ear_events:
-        cmd = ["eacct", "-j", job_fmt, "-x", '-c',
-               '.'.join(['events', csv_file])]
-        res = run(cmd, stdout=PIPE, stderr=PIPE)
-
-    # Return generated file
-    return csv_file
+        sys.exit(f'Unrecognized format: {result_format}')
 
 
 def parser_action(args):
@@ -810,47 +807,35 @@ def parser_action(args):
     # Print configuration file
     if args.print_config == True:
         io_api.print_configuration(config_file_path)
-        return
+        sys.exit()
 
     print(f'Using {config_file_path} as configuration file...')
 
     # Show available metrics
-    if args.avail_metrics == True:
+    if args.avail_metrics is True:
 
         comp = function_compose(get_plottable_metrics,
                                 read_metrics_configuration)
         config_metrics = comp(config_file_path)
         print(f'Available metrics: {" ".join(config_metrics)}.')
-        return
+        sys.exit()
 
     csv_generated = False
 
-    if args.input_file is None:
-
-        print('This version still requires an input file.'
-              'Run an applicatin with --ear-user-db flag.')
-        return
+    if args.loops_file is None:
+        # sys.exit('This version still requires an input file.'
+        #          ' Run an applicatin with --ear-user-db flag.')
 
         # Action performing eacct command and storing csv files
 
-        input_file = eacct(args.format, args.job_id, args.step_id)
-
-        args.input_file = input_file
+        args.loops_file, args.apps_file = eacct(args.format, args.job_id,
+                                                args.step_id)
 
         csv_generated = True
 
-    if args.job_id is None:
-        print('A Job ID is required for filtering data.')
-        return
-
-    if args.format == "runtime" or args.format == "ear2prv":
-        head_path, tail_path = path.split(args.input_file)
-        out_jobs_path = path.join(head_path,
-                                  '.'.join(['out_jobs', tail_path]))
-
     if args.format == "runtime":
 
-        runtime(args.input_file, out_jobs_path,
+        runtime(args.loops_file, args.apps_file,
                 args.metrics, config_file_path, args.manual_range,
                 args.title, args.job_id, args.step_id, args.output)
 
@@ -858,7 +843,7 @@ def parser_action(args):
         events_data_path = None
 
         # Call ear2prv format method
-        ear2prv(out_jobs_path, args.input_file,
+        ear2prv(args.apps_file, args.loops_file,
                 read_job_data_config(config_file_path),
                 read_loop_data_config(config_file_path),
                 read_events_configuration(config_file_path),
@@ -866,10 +851,8 @@ def parser_action(args):
                 step_id=args.step_id, output_fn=args.output)
 
     if csv_generated and not args.keep_csv:
-        system(f'rm {input_file}')
-        system(f'rm {out_jobs_path}')
-        if args.format == 'ear2prv':
-            system(f'rm {out_jobs_path}')
+        system(f'rm {args.loops_file}')
+        system(f'rm {args.apps_file}')
 
 
 def build_parser():
@@ -900,14 +883,14 @@ def build_parser():
                             and visualize EAR job data.''',
                             formatter_class=formatter,
                             epilog='Contact: support@eas4dc.com')
-    parser.add_argument('--version', action='version', version='%(prog)s 5.0')
+    parser.add_argument('--version', action='version', version='%(prog)s 5.1')
 
     main_group = parser.add_argument_group('Main options',
                                            description='''The main option flags
                                            required by the tool.''')
 
     main_group.add_argument('-c', '--config-file',
-                        help='Specify a custom configuration file.')
+                            help='Specify a custom configuration file.')
 
     # format and print-config options are mutually exclusive
     main_excl_grp = main_group.add_mutually_exclusive_group(required=True)
@@ -915,8 +898,8 @@ def build_parser():
     # Specify
     main_excl_grp.add_argument('--format', choices=['runtime', 'ear2prv'],
                                help='''Build results according to chosen format:
-                               `runtime` (static images) or `ear2prv` (using paraver
-                               tool).''')
+                               `runtime` (static images) or `ear2prv` (using
+                                paraver tool).''')
 
     main_excl_grp.add_argument('--print-config', action='store_true',
                                help='''Prints the used configuration file.''')
@@ -929,13 +912,17 @@ def build_parser():
                                            description='''Used when requesting
                                            any of "--format" choices.''')
 
-    format_grp.add_argument('--input-file',
-                        help='''Specifies the input file(s)
-                              name(s) to read data from. It can be a path.
-                              (Required).''')
+    format_grp.add_argument('--loops-file', required='--apps-file' in sys.argv,
+                            help='''Specifies the input file(s)
+                             name(s) to read data from. It can be a path.''')
+
+    format_grp.add_argument('--apps-file', required='--loops-file' in sys.argv,
+                            help='''Specifies the input file(s) name(s) to
+                             read data from. It can be a path.''')
 
     format_grp.add_argument('-j', '--job-id', type=int,
-                            help='Filter the data by the Job ID (Required).')
+                            help='Filter the data by the Job ID.',
+                            required='--format' in sys.argv)
 
     format_grp.add_argument('-s', '--step-id', type=int,
                             help='Filter the data by the Step ID.')
@@ -944,10 +931,10 @@ def build_parser():
                             help="""Sets the output file name.
                             If a path to an existing directory is given,
                             `runtime` option saves files with the form
-                            `runtime_<metric>.pdf` (for each requested metric) will be
-                            on the given directory. Otherwise,
-                            runtime_<metric>-<output> is stored for each resulting
-                            figure.
+                            `runtime_<metric>.pdf` (for each requested metric)
+                             will be on the given directory. Otherwise,
+                            runtime_<metric>-<output> is stored for each
+                             resulting figure.
                             For ear2prv format, specify the base Paraver trace
                             files base name.""")
 
@@ -989,6 +976,8 @@ def main():
     args = parser.parse_args()
 
     parser_action(args)
+
+    sys.exit()
 
 
 if __name__ == '__main__':
