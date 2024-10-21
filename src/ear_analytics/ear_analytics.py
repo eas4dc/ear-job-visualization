@@ -30,8 +30,7 @@ from itertools import chain
 
 from .metrics import read_metrics_configuration, get_plottable_metrics
 
-from .utils import (filter_df, read_job_data_config, read_loop_data_config,
-                    function_compose)
+from .utils import filter_df, read_loop_data_config, function_compose
 
 from . import ear_data as edata
 from . import static_figures
@@ -141,9 +140,9 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
         #     fig.show()
 
 
-def ear2prv(job_data_fn, loop_data_fn, loop_data_config,
-            events_config, config_fn, events_data_fn=None, job_id=None, step_id=None,
-            output_fn=None, events_config_fn=None):
+def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
+            events_data_fn=None, job_id=None, step_id=None, output_fn=None,
+            events_config_fn=None):
 
     def filter_df_columns(df, cols_config):
         """
@@ -167,8 +166,10 @@ def ear2prv(job_data_fn, loop_data_fn, loop_data_config,
 
     def insert_initial_values(df_loops, df_job):
         """
+        Tota aquesta fumada ara es pot simplificar ja que el df_job té job, step, app i node.
+        https://www.geeksforgeeks.org/how-to-add-one-row-in-an-existing-pandas-dataframe/
         This function inserts a row on df_loops for each unique
-        job, step, node tuple, with all values to 0 except TIMESTAMP,
+        job, step, app, node tuple, with all values to 0 except TIMESTAMP,
         got from start_time of the corresponding job, step in df_job.
         """
 
@@ -237,6 +238,7 @@ def ear2prv(job_data_fn, loop_data_fn, loop_data_config,
               )
 
     # Read the Loop data
+    loop_data_config = paraver.ear2prv_loop_config(ear2prv_config)
     df_loops = (io_api.read_data(loop_data_fn, sep=';')
                 .pipe(filter_df, JOBID=job_id, STEPID=step_id)
                 .pipe(filter_df_columns, loop_data_config)
@@ -848,11 +850,10 @@ def parser_action(args):
 
         # Call ear2prv format method
         ear2prv(args.apps_file, args.loops_file,
-                read_loop_data_config(config_file_path),
                 read_events_configuration(config_file_path),
-                config_file_path,
-                events_data_fn=events_data_path, job_id=args.job_id,
-                step_id=args.step_id, output_fn=args.output)
+                config_file_path, events_data_fn=events_data_path,
+                job_id=args.job_id, step_id=args.step_id,
+                output_fn=args.output)
 
     if csv_generated and not args.keep_csv:
         system(f'rm {args.loops_file}')
@@ -883,8 +884,8 @@ def build_parser():
     def formatter(prog):
         return CustomHelpFormatter(prog)
 
-    parser = ArgumentParser(description='''High level support for read
-                            and visualize EAR job data.''',
+    parser = ArgumentParser(description='''High level support for
+                            visualizing EAR job data.''',
                             formatter_class=formatter,
                             epilog='Contact: support@eas4dc.com')
     parser.add_argument('--version', action='version', version='%(prog)s 5.1')
@@ -917,11 +918,11 @@ def build_parser():
                                            any of "--format" choices.''')
 
     format_grp.add_argument('--loops-file', required='--apps-file' in sys.argv,
-                            help='''Specifies the input file(s)
+                            help='''Specifies the loop input file(s)
                              name(s) to read data from. It can be a path.''')
 
     format_grp.add_argument('--apps-file', required='--loops-file' in sys.argv,
-                            help='''Specifies the input file(s) name(s) to
+                            help='''Specifies the app input file(s) name(s) to
                              read data from. It can be a path.''')
 
     format_grp.add_argument('-j', '--job-id', type=int,
@@ -929,7 +930,8 @@ def build_parser():
                             required='--format' in sys.argv)
 
     format_grp.add_argument('-s', '--step-id', type=int,
-                            help='Filter the data by the Step ID.')
+                            help='Filter the data by the Step ID.',
+                            required='runtime' in sys.argv)
 
     format_grp.add_argument('-o', '--output',
                             help="""Sets the output file name.
