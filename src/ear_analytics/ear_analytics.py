@@ -30,7 +30,7 @@ from itertools import chain
 
 from .metrics import read_metrics_configuration, get_plottable_metrics
 
-from .utils import filter_df, read_loop_data_config, function_compose
+from .utils import filter_df, function_compose
 
 from . import ear_data as edata
 from . import static_figures
@@ -166,7 +166,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
 
     def insert_initial_values(df_loops, df_job):
         """
-        Tota aquesta fumada ara es pot simplificar ja que el df_job té job, step, app i node.
+        Tota aquesta fumada ara es pot simplificar ja que el df_job té job,
+        step, app i node.
         https://www.geeksforgeeks.org/how-to-add-one-row-in-an-existing-pandas-dataframe/
         This function inserts a row on df_loops for each unique
         job, step, app, node tuple, with all values to 0 except TIMESTAMP,
@@ -588,8 +589,16 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
                      f'\t{metric}\n' for metric in metric_event_typ_map]
 
     # States body and configuration
+    def groupby_app_task(df):
+        return df.groupby(['app_id', 'task_id'])
+
+    def df_get_start_end_times(df_groupby):
+        return df_groupby[['START_TIME', 'END_TIME']]
+
     df_states = (df_loops
-                 .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
+                 .pipe(groupby_app_task)
+                 .pipe(df_get_start_end_times)
+                 .max()
                  .assign(state_id=1,  # 1 -> Running
                          START_TIME=lambda df: (df.START_TIME - df_job.START_TIME.min()) * 1000000,
                          END_TIME=lambda df: (df.END_TIME - df_job.START_TIME.min()) * 1000000)

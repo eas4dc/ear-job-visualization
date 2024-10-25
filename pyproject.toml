@@ -11,17 +11,15 @@ authors = [
 description = "High level support for read and visualize job information given by the EAR Library."
 readme = "README.md"
 # requires-python = "<3.9"
-keywords = ["data", "visualization", "hpc", "analysis", "ear"]
+keywords = ["data", "visualization", "hpc", "analysis", "ear", "paraver"]
 license = {text = "GPL version 3"}
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
 version = "0.0.1"
 dependencies = [
-		"matplotlib",
+	"matplotlib",
     "pandas",
-    "pylatex",
-    "jinja2",
     "importlib_resources",
 ]
 
