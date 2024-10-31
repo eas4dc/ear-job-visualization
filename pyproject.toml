@@ -3,7 +3,7 @@ requires = ["setuptools>=45"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ear-job-analytics"
+name = "ear-job-visualizer"
 authors = [
     {name = "Oriol Vidal", email = "oriol.vidal@eas4dc.com"},
     {name = "Jalal Lakhlili", email = "jalal.lakhlili@eas4dc.com"}
@@ -12,7 +12,7 @@ description = "High level support for read and visualize job information given b
 readme = "README.md"
 # requires-python = "<3.9"
 keywords = ["data", "visualization", "hpc", "analysis", "ear", "paraver"]
-license = {text = "GPL version 3"}
+license = {text = "EPL-2.0"}
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
@@ -24,4 +24,4 @@ dependencies = [
 ]
 
 [project.scripts]
-ear-job-analytics = "ear_analytics.ear_analytics:main"
+ear-job-visualizer = "ear_analytics.ear_analytics:main"
