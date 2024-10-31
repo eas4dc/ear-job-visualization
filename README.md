@@ -1,7 +1,7 @@
-# ear-job-analytics
+# ear-job-visualization
 
 A tool to automatically read and visualise runtime data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) software.
-**ear-analytics** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
+**ear-job-visualization** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
 The main visualisation target is to show runtime metrics collected by the EAR Library in a timeline graph.
 
 By now this tool supports two kind of output formats:
@@ -49,8 +49,7 @@ Tool's developers may want to use `pip install -e .` to install the package in e
 Then, you can type `ear-job-analytics` and you should see the following:
 
 ```
-usage: ear-job-analytics [-h] [--version] [-c CONFIG_FILE]
-                         (--format {runtime,ear2prv,summary} | --print-config | --avail-metrics)
+usage: ear-job-visualization [-h] [--version] [-c CONFIG_FILE] (--format {runtime,ear2prv,summary} | --print-config | --avail-metrics)
                          [--input-file INPUT_FILE] [-j JOB_ID] [-s STEP_ID]
                          [-o OUTPUT] [-k] [-t TITLE] [-r]
                          [-m metric [metric ...]]
@@ -90,7 +89,7 @@ You can take the printed configuration as an example for making yours and use it
 The usage of this flag is very simple:
 
 ```bash
-ear-job-analytics --print-config
+ear-job-visualization --print-config
 ```
 
 ### `--avail-metrics`
