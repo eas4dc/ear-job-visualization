@@ -783,7 +783,7 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
         cmd_loops = ["eacct", "-j", job_fmt, "-r", "-c", csv_loops_file]
         cmd_apps = ["eacct", "-j", job_fmt, "-l", "-c", csv_apps_file]
 
-        # Run the command
+        # Run commands
         try:
             res_loops = subprocess.run(cmd_loops, capture_output=True,
                                        check=True)
