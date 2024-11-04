@@ -1,7 +1,7 @@
 # ear-job-visualization
 
 A tool to automatically read and visualise runtime data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) software.
-**ear-job-visualization** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
+**ear-job-visualizer** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
 The main visualisation target is to show runtime metrics collected by the EAR Library in a timeline graph.
 
 By now this tool supports two kind of output formats:
@@ -22,8 +22,8 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 - matplotlib
 - importlib\_resources
 
-By default, the tool calls internally the EAR account command (i.e., *eacct*) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
-> Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
+By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
+> Be sure you have the the `eacct` command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
 
 If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
 You can also provide directly input files if the `eacct` command is unable, [read below](#providing-files-instead-of-using-internally-eacct).
@@ -106,70 +106,37 @@ ear-job-analytics --avail-metrics -c my_config.json
 
 This option is in fact used to request for plotting (or converting) data.
 
-Choices for this option are either *runtime*, *ear2prv*, and each one enables each of the tool's features.
+Choices for this option are either `runtime`, `ear2prv`, and each one enables each of the tool's features.
 Read below sections for a detailed description of each one.
 
-The *runtime* option is the one used to generate static images, while *ear2prv* refers the tool's interface to output data following the Paraver Trace Format.
+The `runtime` option is the one used to generate static images, while `ear2prv` refers the tool's interface to output data following the Paraver Trace Format.
 Both format options share a subset of arguments.
 
-The *--job-id* flag is **mandatory** to be specified.
+The `--job-id` flag is **mandatory** to be specified.
 It is used by the tool to filter input data in the case it contains more than one Job ID, as it currently only supports single job visualisation.
-Moreover, you can set the *--step-id* flag to filter also the Step ID, which is **mandatory for *--format runtime* option** and **optional for *--format ear2prv***, since the latter supports multiple step data in the input.
+Moreover, you can set the `--step-id` flag to filter also the Step ID, which is **mandatory for `--format runtime` option** and **optional for `--format ear2prv`**, since the latter supports multiple step data in the input.
 
 By default, the tool will internally call the `eacct` command and will store the data into temporary files.
 Those files will be used by the tool and are removed at the end.
-If you want to prevent the removal of that files, you can add the *--keep-csv* flag.
+If you want to prevent the removal of that files, you can add the `--keep-csv` flag.
 
-#### Providing files instead of using internally eacct
-
-~If you know which *eacct* invokations are required to visualise the data, you can use the option *--input-file* to specify where the tool will find the data to be filtered by the two required job-related options (e.g., *--job-id*, *--step-id*).
+If you know which `eacct` invokations are required to visualise the data, you can use `--loops-file` and `--apps-file` options to specify where the tool can find the data to be filtered and used.
+**Both of them are required if you are going to use the tool escaping the internal use of the `eacct` command.**
+The former is obtained through `eacct -j <jobid>[.stepid] -r -c <loops_file>` and the latter through `eacct -j <jobid>[.stepid] -l -c <apps_file>`.
+You can alternatively obtain both files by using one of the EAR [report plug-ins](https://gitlab.bsc.es/ear_team/ear/-/wikis/Report#csv) distributed with EAR.
 This option is useful when you already have data for multiple jobs and/or steps together and you want to work on it in several ways because naturally it's more fast to work directly on a file than invoking a command to make a query to a Database, storing the output on a file, and then read such file.
-This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.~
-
-~The way how the value of this option is handled depends on which functionality (e.g., *format*) you are working on, and which kind of data you want to produce/visualise.
-If **runtime** format option is used, the *--input-file* option can be a single filename (which can be given with its relative path) wich contains EAR loop data.~
-~~If a directory name is given, the tool will read all files inside it (another reason why it is required to specify the Job and Step IDs).~~
-
-> ~If you started working by using *eacct* command internally, all required files are stored temporally while the tool is doing its work.~
-> ~If you want to reuse such files later you can pass the option `--keep-csv` to prevent files been removed.~
-> ~Then, you can provide those files to get different output.~
+This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.
 
 ### *runtime* format
 
 Generate a heatmap-based graph for each metric specified by `--metrics` argument (i.e., space separated list of metric names).
-Note that the accepted metrics by your **ear-job-analytics** installation are specified in the [configuration](Configuration) file and you can request the list trough `--avail-metrics` flag.
+Note that the accepted metrics are specified in the [configuration](Configuration) file and you can request the list trough the `--avail-metrics` flag.
 
-The resulting figure (for each metric specified) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric during application execution.
+The resulting figure (for each requested metric) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric during application execution.
 All nodes visualised share the same timeline, which makes this command useful to check the application behaviour over all of them.
-
-#### Examples
-
-```
-$> ear-job-analytics --format runtime --input-file test_files/loops.gromacs_223676.csv -j 223676 -s 0 --save -l -r -m dc_power
-reading file test_files/loops.gromacs_223676.csv
-storing figure runtime_dc_power-223676-0
-```
-
-You can check the resulting figure [here](src/extra/examples/imgs/runtime_dc_power-223676-0.pdf).
-
-#### Request metrics
-
-The *--metrics* option allows you request one or more metrics to visualize.
-Type `ear-job-analytics --help` to see which of them are currently available.
-Metrics are specified by a configuration file (not documented yet), so it's easy to extend the supported ones.
-Contact with support@eas4dc.com to request more metrics.
+If you request GPU metrics, the graph will show you per-GPU data.
 
 By default, the range to compute each metric runtime gradient is configured at *config.json*, but you can tell the tool to compute the gradient based on the range of the current data by typing `--relative-range` option before requestingthe metrics list:
-
-```
-$> ear-job-analytics --format runtime --input-file test_files/loops.gromacs_223676.csv --job-id 223676 --step-id 0 --relative-range -m dc_power cpi
-```
-
-#### Change the output
-
-By default, the legend of the gradient is displayed vertically at the right of timelines.
-If there are a few timelines, the height of the legend can be too short to correctly visualize the color range legend.
-You can set the `--horizontal-legend` option to display the legend horizontally below timelines, so you make sure the size is sufficient to read color codes.
 
 ## Configuration
 
