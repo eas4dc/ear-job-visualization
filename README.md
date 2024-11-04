@@ -5,7 +5,7 @@ A tool to automatically read and visualise runtime data provided by the [EAR](ht
 The main visualisation target is to show runtime metrics collected by the EAR Library in a timeline graph.
 
 By now this tool supports two kind of output formats:
-1. Directly generate images showing runtime information.
+1. Directly generate images showing job runtime information.
 2. Generate a trace file to be read by Paraver, a tool to visualise and manage trace data maintaned by the Barcelona Supercomputing Center's Tools team.
 
 For more information, read about [eacct](https://gitlab.bsc.es/ear_team/ear/-/wikis/EAR-commands#ear-job-accounting-eacct) or [this guide](https://gitlab.bsc.es/ear_team/ear/-/wikis/User%20guide#running-jobs-with-ear) which shows you how to run jobs with EAR and how to obtain runtime data.
@@ -15,22 +15,18 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 - Generate static images showing runtime metrics of your job monitored by EARL.
 - Generate Paraver traces to visualize runtime metrics within Paraver tool or any other tool of the BSC's Tools teams.
-- **(Beta)** Generate a LaTeX project with the most relevant information about the job to be analyzed.
-    - Job global summary.
-    - Job phase classification.
-    - Job runtime metrics.
 
 ## Requirements
 
 - pandas
 - matplotlib
-- importlib_resources
+- importlib\_resources
 
-~By default, the tool calls internally the EAR account command (i.e., *eacct*) with the proper information and options in order to get the corresponding data to be sent to the tool's functionalities.~
-> ~Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.~
+By default, the tool calls internally the EAR account command (i.e., *eacct*) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
+> Be sure you have the the *eacct* command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
 
-~If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
-You can also provide directly input files if eacct is unable, [read below](https://github.com/eas4dc/ear-job-analytics/blob/main/README.md#providing-files-instead-of-using-internally-eacct).~
+If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
+You can also provide directly input files if the `eacct` command is unable, [read below](#providing-files-instead-of-using-internally-eacct).
 
 ## Installation
 
@@ -44,20 +40,19 @@ python -m build
 pip install .
 ```
 
-Tool's developers may want to use `pip install -e .` to install the package in editable mode, so there is no need to reinstall every time you want to test a new feature.
+> You can change the destination path by export the variable 
+> Tool's developers may want to use `pip install -e .` to install the package in editable mode, so there is no need to reinstall every time you want to test a new feature.
 
-Then, you can type `ear-job-analytics` and you should see the following:
+Then, you can type `ear-job-visualizer` and you should see the following:
 
 ```
-usage: ear-job-visualization [-h] [--version] [-c CONFIG_FILE] (--format {runtime,ear2prv,summary} | --print-config | --avail-metrics)
-                         [--input-file INPUT_FILE] [-j JOB_ID] [-s STEP_ID]
-                         [-o OUTPUT] [-k] [-t TITLE] [-r]
-                         [-m metric [metric ...]]
-ear-job-analytics: error: one of the arguments --format --print-config --avail-metrics is required
+usage: ear-job-visualizer [-h] [--version] [-c CONFIG_FILE]
+                          (--format {runtime,ear2prv} | --print-config | --avail-metrics)
+                          [--loops-file LOOPS_FILE] [--apps-file APPS_FILE]
+                          [-j JOB_ID] [-s STEP_ID] [-o OUTPUT] [-k] [-t TITLE]
+                          [-r] [-m metric [metric ...]]
+ear-job-visualizer: error: one of the arguments --format --print-config --avail-metrics is required
 ```
-
-If you had some trouble during the build and/or installation process, contact to support@eas4dc.com.
-We are trying provide a more easy way to install the package.
 
 ### Make the package usable by other users
 
@@ -71,7 +66,7 @@ For example, if you have installed the tool in a virtual environment located in 
 ```lua
 # An example module file for Lmod
 
-whatis("Enables the usage of ear-job-analytics, a tool for visualizing performance metrics collected by EAR.")
+whatis("Enables the usage of ear-job-visualizer, a tool for visualizing performance metrics collected by EAR.")
 
 prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-packages")
 prepend_path("PATH", "virtualenv/install/dir/bin")
@@ -89,7 +84,7 @@ You can take the printed configuration as an example for making yours and use it
 The usage of this flag is very simple:
 
 ```bash
-ear-job-visualization --print-config
+ear-job-visualization --print-config > my_config.json
 ```
 
 ### `--avail-metrics`
@@ -111,37 +106,21 @@ ear-job-analytics --avail-metrics -c my_config.json
 
 This option is in fact used to request for plotting (or converting) data.
 
-Choices for this option are either *runtime*, *ear2prv* ~or *job-summary (beta)*~, and each one enables each of the tool's features.
+Choices for this option are either *runtime*, *ear2prv*, and each one enables each of the tool's features.
 Read below sections for a detailed description of each one.
 
 The *runtime* option is the one used to generate static images, while *ear2prv* refers the tool's interface to output data following the Paraver Trace Format.
-Finally, *job-summary* generates an overview analysis of the most relevant information of the job.
+Both format options share a subset of arguments.
 
-> _job-summary_ format is not in production yet.
+The *--job-id* flag is **mandatory** to be specified.
+It is used by the tool to filter input data in the case it contains more than one Job ID, as it currently only supports single job visualisation.
+Moreover, you can set the *--step-id* flag to filter also the Step ID, which is **mandatory for *--format runtime* option** and **optional for *--format ear2prv***, since the latter supports multiple step data in the input.
 
-You must use the `--input-file` option to specify where the tool will find the data.
-You need two files:
+By default, the tool will internally call the `eacct` command and will store the data into temporary files.
+Those files will be used by the tool and are removed at the end.
+If you want to prevent the removal of that files, you can add the *--keep-csv* flag.
 
-- Loop csv file: EAR loop signature CSV file obtained by using `--ear-user-db` flag when launching an application. Normally named `<app name>.<node name>.time.loops.csv`.
-- Job csv file: EAR application global signatures obtained by using `--ear-user-db` flag (both files are generated by setting the flag just once). Normally named `<app name>.<node name>.time.csv`.
-
-**You must rename the job csv file** in order to get the tool working. Set the same name as loop csv file and prepend the string `out_jobs.`:
-
-```bash
-mv <app name>.<node name>.time.csv out_jobs.<app name>.<node name>.time.loops.csv
-```
-
-Put both files in the same path, and pass the original loop csv file name to the tool (i.e., `--input-file <app name>.<node name>.time.loops.csv`).
-
-Finally, you must specify the Job ID (i.e., `--job-id`) of the job being analyzed as features currently only support working with data corresponding with one Job.
-This required option ensures the tool to filter the input data by Job ID to avoid possible errors on the output.
-So, the minimum shape of an invokation is:
-
-```bash
-ear-job-analytics --format [runtime|ear2prv|summary] --input-file <loops csv file> --job-id <JobID>
-```
-
-### ~Providing files instead of using internally eacct~
+#### Providing files instead of using internally eacct
 
 ~If you know which *eacct* invokations are required to visualise the data, you can use the option *--input-file* to specify where the tool will find the data to be filtered by the two required job-related options (e.g., *--job-id*, *--step-id*).
 This option is useful when you already have data for multiple jobs and/or steps together and you want to work on it in several ways because naturally it's more fast to work directly on a file than invoking a command to make a query to a Database, storing the output on a file, and then read such file.
