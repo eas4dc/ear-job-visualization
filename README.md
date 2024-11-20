@@ -31,7 +31,8 @@ You can also provide directly input files if the `eacct` command is unable, [rea
 ## Installation
 
 This repository contains all recipes to build and install the package.
-You need **build** and **setuptools** packages to properly build and install this one.
+You need **build** and **setuptools** packages to properly build and install it.
+You can also use the [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUSERBASE) environment variable to modify the target directory for the installation.
 
 ```bash
 pip install -U pip
@@ -58,8 +59,9 @@ ear-job-visualizer: error: one of the arguments --format --print-config --avail-
 
 You can install the tool to be available to other users in multiple ways, and maybe you know a better approach for doing so or which fits much better to your use case, but here there is explained a way we found useful to fit on systems where we put this tool in production.
 
-1 - Prepend the path to `site-packages` directory where you have installed the tool to `PYTHONPATH`.
-2 - Prepend the path to `bin` directory where you have installed the tool to `PATH`.
+1. Export the [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUSERBASE) environment variable to modify the target directory for the installation.
+2. Prepend the path to `site-packages` directory where you have installed the tool to `PYTHONPATH`.
+3. Prepend the path to `bin` directory where you have installed the tool to `PATH`.
 
 For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `virtualenv/install/dir/lib/python<version>/site-packages` to `PYTHONPATH` variable and `virtualenv/install/dir/bin` to `PATH`.
 
@@ -68,6 +70,7 @@ For example, if you have installed the tool in a virtual environment located in 
 
 whatis("Enables the usage of ear-job-visualizer, a tool for visualizing performance metrics collected by EAR.")
 
+depends_on("") # Add here the required python module you used for building the package.
 prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-packages")
 prepend_path("PATH", "virtualenv/install/dir/bin")
 ```
