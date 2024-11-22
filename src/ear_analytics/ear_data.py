@@ -33,7 +33,7 @@ def df_get_valid_gpu_data(df, gpu_metrics_regex):
             .mask(lambda x: x.isna(), other=0))  # Return to 0s
 
 
-def filter_invalid_gpu_series(df, config_fn):
+def filter_invalid_gpu_series(df, gpu_metrics_regex):
     """
     Given a DataFrame with EAR data, filters those GPU
     columns that not contain some of the job's GPUs used.
@@ -41,13 +41,11 @@ def filter_invalid_gpu_series(df, config_fn):
     TODO: Pay attention here because this function depends directly
     on EAR's output.
     """
-    gpu_metric_regex_str = io_api.read_configuration(config_fn)['columns']['gpu_data']['gpu_columns_re']
-
     return (df
             .drop(df  # Erase GPU columns
-                  .filter(regex=gpu_metric_regex_str).columns, axis=1)
+                  .filter(regex=gpu_metrics_regex).columns, axis=1)
             .join(df  # Join with valid GPU columns
-                  .pipe(df_get_valid_gpu_data, gpu_metric_regex_str),
+                  .pipe(df_get_valid_gpu_data, gpu_metrics_regex),
                   validate='one_to_one'))  # Validate the join operation
 
 

@@ -28,7 +28,7 @@ from importlib_resources import files
 
 from itertools import chain
 
-from .metrics import read_metrics_configuration, print_runtime_metrics
+from .metrics import print_runtime_metrics
 
 from .utils import filter_df, function_compose
 
@@ -59,9 +59,12 @@ def runtime(loops_fn, out_jobs_fn, req_metrics, config_fn,
 
     avail_metrics = {**node_metrics, **gpu_metrics}
 
+    gpu_metrics_re = (static_figures
+                      .runtime_get_gpu_metrics_regex(runtime_config))
+
     df = (io_api.read_data(loops_fn, sep=';')
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, APPID=app_id)
-          .pipe(edata.filter_invalid_gpu_series, config_fn)
+          .pipe(edata.filter_invalid_gpu_series, gpu_metrics_re)
           # .pipe(edata.df_gpu_node_metrics, config_fn)
           )
     df_job = (io_api.read_data(out_jobs_fn, sep=';')
@@ -76,9 +79,6 @@ def runtime(loops_fn, out_jobs_fn, req_metrics, config_fn,
 
     end_time_col = static_figures.runtime_app_end_time_col(runtime_config)
     max_end_time = df_job[end_time_col].max()
-
-    gpu_metrics_re = (static_figures
-                      .runtime_get_gpu_metrics_regex(runtime_config))
 
     for metric in req_metrics:
         # Get a valid EAR column name
