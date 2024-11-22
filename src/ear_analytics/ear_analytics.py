@@ -28,7 +28,7 @@ from importlib_resources import files
 
 from itertools import chain
 
-from .metrics import read_metrics_configuration, get_plottable_metrics
+from .metrics import read_metrics_configuration, print_runtime_metrics
 
 from .utils import filter_df, function_compose
 
@@ -40,47 +40,51 @@ from . import io_api
 from .events import read_events_configuration
 
 
-def metric_timeline(df, metric, step, fig_fn, fig_title='', **kwargs):
-    fig = static_figures.generate_metric_timeline_fig(df, metric, step,
-                                                      fig_title=fig_title,
-                                                      **kwargs)
-    fig.savefig(fig_fn)
-
-
-def runtime(filename, out_jobs_fn, req_metrics, config_fn,
-            rel_range=True, title=None, job_id=None, step_id=None,
+def runtime(loops_fn, out_jobs_fn, req_metrics, config_fn,
+            rel_range=True, title=None, job_id=None, step_id=None, app_id=None,
             output=None):
     """
     This function generates a heatmap of runtime metrics requested by
     `req_metrics`.
 
-    It also receives the `filename` to read data from,
+    It also receives the `loops_fn` to read data from,
     and `avail_metrics` supported.
     """
-    avail_metrics = read_metrics_configuration(config_fn)
+    runtime_config = static_figures.read_runtime_configuration(config_fn)
+    print(config_fn)
+    node_metrics = (static_figures
+                    .runtime_node_metrics_configuration(runtime_config))
+    gpu_metrics = (static_figures
+                   .runtime_gpu_metrics_configuration(runtime_config))
 
-    df = (io_api.read_data(filename, sep=';')
-          .pipe(filter_df, JOBID=job_id, STEPID=step_id)
+    avail_metrics = {**node_metrics, **gpu_metrics}
+
+    df = (io_api.read_data(loops_fn, sep=';')
+          .pipe(filter_df, JOBID=job_id, STEPID=step_id, APPID=app_id)
           .pipe(edata.filter_invalid_gpu_series, config_fn)
-          .pipe(edata.df_gpu_node_metrics, config_fn)
+          # .pipe(edata.df_gpu_node_metrics, config_fn)
           )
     df_job = (io_api.read_data(out_jobs_fn, sep=';')
               .pipe(filter_df, JOBID=job_id, STEPID=step_id,
-                    id=job_id, step_id=step_id))
+                    id=job_id, step_id=step_id, APPID=app_id))
     if df.empty is True or df_job.empty is True:
         sys.exit('Either loop or app data is empty.')
 
     # We need the application start time
-    configuration = io_api.read_configuration(config_fn)
+    start_time_col = static_figures.runtime_app_start_time_col(runtime_config)
+    min_start_time = df_job[start_time_col].min()
 
-    start_time_col = configuration['columns']['app_info']['start_time']
-    app_start_time = df_job[start_time_col].min()
+    end_time_col = static_figures.runtime_app_end_time_col(runtime_config)
+    max_end_time = df_job[end_time_col].max()
 
-    end_time_col = configuration['columns']['app_info']['end_time']
-    app_end_time = df_job[end_time_col].max()
+    gpu_metrics_re = (static_figures
+                      .runtime_get_gpu_metrics_regex(runtime_config))
 
     for metric in req_metrics:
         # Get a valid EAR column name
+        if metric not in avail_metrics:
+            print(f'Warning: {metric} not recognized!')
+            continue
         metric_config = avail_metrics[metric]
 
         metric_name = metric_config['column_name']
@@ -106,10 +110,9 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
                 if step_id is not None:
                     fig_title = '-'.join([fig_title, str(step_id)])
 
-        gpu_metrics_re = configuration['columns']['gpu_data']['gpu_columns_re']
         fig = (static_figures
-               .generate_metric_timeline_fig(df, app_start_time,
-                                             app_end_time,
+               .generate_metric_timeline_fig(df, min_start_time,
+                                             max_end_time,
                                              metric_name, step,
                                              v_min=v_min,
                                              v_max=v_max,
@@ -117,14 +120,7 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
                                              metric_display_name=dsply_nm,
                                              gpu_metrics_re=gpu_metrics_re))
 
-        # if save:
         name = f'runtime_{metric}'
-        """
-        if job_id:
-            name = '-'.join([name, str(job_id)])
-            if step_id is not None:
-                name = '-'.join([name, str(step_id)])
-        """
 
         if output:
             if path.isdir(output):
@@ -136,8 +132,6 @@ def runtime(filename, out_jobs_fn, req_metrics, config_fn,
         print(f'storing figure {name}')
 
         fig.savefig(name, dpi='figure', bbox_inches='tight')
-        # else:
-        #     fig.show()
 
 
 def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
@@ -828,19 +822,12 @@ def parser_action(args):
 
     # Show available metrics
     if args.avail_metrics is True:
-
-        comp = function_compose(get_plottable_metrics,
-                                read_metrics_configuration)
-        config_metrics = comp(config_file_path)
-        print(f'Available metrics: {" ".join(config_metrics)}.')
+        print_runtime_metrics(config_file_path)
         sys.exit()
 
     csv_generated = False
 
     if args.loops_file is None:
-        # sys.exit('This version still requires an input file.'
-        #          ' Run an applicatin with --ear-user-db flag.')
-
         # Action performing eacct command and storing csv files
 
         args.loops_file, args.apps_file = eacct(args.format, args.job_id,
@@ -978,7 +965,8 @@ def build_parser():
                         ' metrics names to visualize. Allowed values can '
                         'be viewed with `ear-job-analytics --avail-metrics`.')
     runtime_grp.add_argument('-m', '--metrics', help=metrics_help_str,
-                             metavar='metric', nargs='+')
+                             metavar='metric', nargs='+',
+                             required='runtime' in sys.argv)
 
     return parser
 

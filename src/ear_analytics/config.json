@@ -1,4 +1,231 @@
 {
+	"runtime" : {
+		"metrics" : {
+			"cpi" : {
+				"column_name" : "CPI",
+				"range" : [0.29, 0.69],
+				"step" : 0.1
+			},
+			"gflops" : {
+				"column_name" : "^GFLOPS",
+				"range" : [3, 60],
+				"step" : 1,
+				"display_name" : "CPU GFLOPS"
+			},
+			"avg_cpufreq" : {
+				"column_name" : "AVG_CPUFREQ_KHZ",
+				"range" : [1.5e6, 2.4e6],
+				"step" : 100000,
+				"display_name" : "Avg. CPU Freq. (kHz)"
+			},
+			"avg_imcfreq" : {
+				"column_name" : "AVG_IMCFREQ_KHZ",
+				"range" : [1.0e6, 2.4e6],
+				"step" : 100000,
+				"display_name" : "Avg. IMC Freq. (kHz)"
+			},
+			"def_freq" : {
+				"column_name" : "DEF_FREQ_KHZ",
+				"range" : [1.5e6, 3.6e6],
+				"step" : 100000,
+				"display_name" : "EAR def. CPU Freq. (kHz)"
+			},
+			"tpi" : {
+				"column_name" : "TPI",
+				"range" : [1, 7],
+				"step" : 5
+			},
+			"gbs" : {
+				"column_name" : "MEM_GBS",
+				"range" : [10, 60],
+				"step" : 15,
+				"display_name" : "Memory bandwidth (GB/s)"
+			},
+			"dc_power" : {
+				"column_name" : "DC_NODE_POWER_W",
+				"range" : [300, 800],
+				"step" : 50,
+				"display_name" : "DC Node Power (W)"
+			},
+			"dram_power" : {
+				"column_name" : "DRAM_POWER_W",
+				"range" : [5, 50],
+				"step" : 15,
+				"display_name" : "DRAM Power (W)"
+			},
+			"pck_power" : {
+				"column_name" : "PCK_POWER_W",
+				"range" : [100, 400],
+				"step" : 30,
+				"display_name" : "Package Power (W)"
+			},
+			"perc_mpi" : {
+				"column_name" : "PERC_MPI",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "%MPI"
+			},
+			"io_mbs" : {
+				"column_name" : "IO_MBS",
+				"range" : [0, 1000],
+				"step" : 10,
+				"display_name" : "I/O MB/s"
+			},
+			"iteration_time" : {
+				"column_name" : "ITER_TIME_SEC",
+				"range" : [0, 10],
+				"step" : 1,
+				"display_name" : "Iteration time (s)"
+			},
+			"cpu_util" : {
+				"column_name" : "CPU_UTIL",
+				"range" : [0, 11200],
+				"step" : 100,
+				"display_name" : "CPU utilization (%)"
+			}
+		},
+		"gpu_metrics" : {
+			"gpu_power" : {
+				"column_name" : "GPU(\\d)_POWER_W",
+				"range" : [50, 150],
+				"step" : 50,
+				"display_name" : "GPU Power (W)"
+			},
+			"gpu_freq" : {
+				"column_name" : "GPU(\\d)_FREQ_KHZ",
+				"range" : [0.8e6, 1.41e6],
+				"step" : 100000,
+				"display_name" : "GPU freq. (kHz)"
+			},
+			"gpu_memfreq" : {
+				"column_name" : "GPU(\\d)_MEM_FREQ_KHZ",
+				"range" : [0.8e6, 1.41e6],
+				"step" : 100000,
+				"display_name" : "GPU memory freq. (kHz)"
+			},
+			"gpu_util" : {
+				"column_name" : "GPU(\\d)_UTIL_PERC",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU util. (%)"
+			},
+			"gpu_memutil" : {
+				"column_name" : "GPU(\\d)_MEM_UTIL_PERC",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU memory util. (%)"
+			},
+			"dcgmi_gr_engine_active" : {
+				"column_name": "GPU(\\d)_gr_engine_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "Graphics Engine Activity"
+			},
+			"dcgmi_sm_active" : {
+				"column_name" : "GPU(\\d)_sm_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU SM Activity"
+			},
+			"dcgmi_sm_occupancy" : {
+				"column_name" : "GPU(\\d)_sm_occupancy",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU SM Occupancy"
+			},
+			"dcgmi_pipe_tensor_active" : {
+				"column_name" : "GPU(\\d)_tensor_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU Tensor Activity"
+			},
+			"dcgmi_pipe_fp64_active" : {
+				"column_name" : "GPU(\\d)_fp64_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU FP64 Engine Activity"
+			},
+			"dcgmi_pipe_fp32_active" : {
+				"column_name" : "GPU(\\d)_fp32_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU FP32 Engine Activity"
+			},
+			"dcgmi_pipe_fp16_active" : {
+				"column_name" : "GPU(\\d)_fp16_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU FP16 Engine Activity"
+			},
+			"dcgmi_dram_active" : {
+				"column_name" : "GPU(\\d)_dram_active",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "GPU Memory BW Utilization"
+			},
+			"dcgmi_nvlink_tx_bytes" : {
+				"column_name" : "GPU(\\d)_nvlink_tx_bytes",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "NVLink Tx Bandwidth (B/s)"
+			},
+			"dcgmi_nvlink_rx_bytes" : {
+				"column_name" : "GPU(\\d)_nvlink_rx_bytes",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "NVLink Rx Bandwidth (B/s)"
+			},
+			"dcgmi_pcie_tx_bytes" : {
+				"column_name" : "GPU(\\d)_pcie_tx_bytes",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "PCIe Tx Bandwidth (B/s)"
+			},
+			"dcgmi_pcie_rx_bytes" : {
+				"column_name" : "GPU(\\d)_pcie_rx_bytes",
+				"range" : [0, 100],
+				"step" : 10,
+				"display_name" : "PCIe Rx Bandwidth (B/s)"
+			},
+			"gpu_gflops" : {
+				"column_name" : "GPU(\\d)_GFLOPS",
+				"range" : [0, 5000],
+				"step" : 200,
+				"display_name" : "GPU GFLOPS"
+			},
+			"gpu_temperature" : {
+				"column_name" : "GPU(\\d)_TEMP",
+				"range" : [20, 150],
+				"step" : 10,
+				"display_name" : "GPU temperature (celsius)"
+			},
+			"gpu_mem_temperature" : {
+				"column_name" : "GPU(\\d)_MEMTEMP",
+				"range" : [20, 150],
+				"step" : 10,
+				"display_name" : "GPU memory temperature (celsius)"
+			}
+		},
+		"socket_metrics" : {
+			"temperature" : {
+				"column_name" : "TEMP(\\d)",
+				"range" : [20, 150],
+				"step" : 10,
+				"display_name" : "Temperature (celsius)"
+			}
+		},
+		"app_info" : {
+			"job_id" : "JOBID",
+			"step_id" : "STEPID",
+			"app_id" : "APPID",
+			"start_time" : "START_TIME",
+			"end_time" : "END_TIME",
+			"node_name" : "NODENAME"
+		},
+		"gpu_data" : {
+			"gpu_columns_re" : "GPU(\\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|UTIL_PERC|MEM_UTIL_PERC|GFLOPS|sm_occupancy|(sm|tensor|fp(64|32|16)|dram|gr_engine)_active|(nvlink|pcie)_(tx|rx)_bytes)"
+		}
+	},
 	"columns" : {
 		"app_info" : {
 			"job_id" : "JOBID",
@@ -247,7 +474,7 @@
 			}
 		},
 		"gpu_data" : {
-			"gpu_columns_re" : "GPU(\\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|UTIL_PERC|MEM_UTIL_PERC|(10[01][0-9]))"
+			"gpu_columns_re" : "GPU(\\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|UTIL_PERC|MEM_UTIL_PERC|GFLOPS|sm_occupancy|(sm|tensor|fp(64|32|16)|dram|gr_engine)_active|(nvlink|pcie)_(tx|rx)_bytes)"
 		}
 	},
 	"events" : {
