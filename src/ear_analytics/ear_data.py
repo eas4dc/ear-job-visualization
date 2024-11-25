@@ -14,7 +14,6 @@ to a DataFrame contained known EAR data. """
 
 import numpy as np
 
-from . import io_api
 from .utils import join_metric_node
 from .metrics import read_metrics_configuration, metric_regex
 
@@ -89,19 +88,13 @@ def df_gpu_node_metrics(df, conf_fn):
                 ))
 
 
-def metric_timeseries_by_node(df, metric):
+def metric_timeseries_by_node(df, df_job, metric):
     """
-    TODO: Pay attention here because this function depends directly
-    on EAR's output.
     """
-    def print_df(df):
-        print(df)
-        return df
+    columns = ['JOBID', 'STEPID', 'APPID', 'NODENAME']
+    df_job = df_job.set_index(columns)[['START_TIME', 'END_TIME']]
     return (df
-            .pivot_table(values=metric,
-                         index='TIMESTAMP', columns='NODENAME')
-            .bfill()
-            .pipe(join_metric_node)
+            .pivot_table(columns=columns, values=metric, index='TIMESTAMP')
             )
 
 

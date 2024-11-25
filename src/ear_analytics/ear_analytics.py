@@ -33,34 +33,57 @@ from .metrics import print_runtime_metrics
 from .utils import filter_df, function_compose
 
 from . import ear_data as edata
-from . import static_figures
+from . import runtime
 from . import paraver
 from . import io_api
 
 from .events import read_events_configuration
 
 
-def runtime(loops_fn, out_jobs_fn, req_metrics, config_fn,
-            rel_range=True, title=None, job_id=None, step_id=None, app_id=None,
-            output=None):
+def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
+                   rel_range=True, title=None, job_id=None, step_id=None,
+                   app_id=None, output=None):
     """
-    This function generates a heatmap of runtime metrics requested by
-    `req_metrics`.
+    This function creates and saves a figure with a heatmap of runtime data for
+    each requested metric in `req_metrics`. Resulting figures names are of the
+    form 'runtime_<metric>.png' for each requested metric if the argument
+    `output` is None, otherwise it is 'runtime_<metric>-<output>' if output
+    is a str which does not represent a directory. If so, resulting figures are
+    saved as 'output/runtime_<metric>.png'.
+
+    Parameters:
+        - loops_fn: The filename or directory containing loops data.
+        - out_jobs_fn: The filename or directory containing application data.
+        - req_metrics: A list of metrics to generate figures.
+        - config_fn: The filename of the configuration file.
+        - rel_range: Sets whether compute the gradient based on the range of
+            the metric in the input data. If false, use the configured range.
+        - output: Change the default output figures filanames.
+
+    Kwargs:
+        - job_id: Filter input data by JOBID.
+        - step_id: Filter input data by STEPID.
+        - app_id: Filter input data by APPID.
+        - title: Sets resulting figures title: '<title>: metric'
 
     It also receives the `loops_fn` to read data from,
     and `avail_metrics` supported.
     """
-    runtime_config = static_figures.read_runtime_configuration(config_fn)
+    runtime_config = runtime.runtime_get_configuration(config_fn)
     print(config_fn)
-    node_metrics = (static_figures
+    node_metrics = (runtime
                     .runtime_node_metrics_configuration(runtime_config))
-    gpu_metrics = (static_figures
+    gpu_metrics = (runtime
                    .runtime_gpu_metrics_configuration(runtime_config))
 
     avail_metrics = {**node_metrics, **gpu_metrics}
 
-    gpu_metrics_re = (static_figures
+    gpu_metrics_re = (runtime
                       .runtime_get_gpu_metrics_regex(runtime_config))
+
+    # job_id = kwargs.get('job_id', None)
+    # step_id = kwargs.get('step_id', None)
+    # app_id = kwargs.get('app_id', None)
 
     df = (io_api.read_data(loops_fn, sep=';')
           .pipe(filter_df, JOBID=job_id, STEPID=step_id, APPID=app_id)
@@ -74,10 +97,10 @@ def runtime(loops_fn, out_jobs_fn, req_metrics, config_fn,
         sys.exit('Either loop or app data is empty.')
 
     # We need the application start time
-    start_time_col = static_figures.runtime_app_start_time_col(runtime_config)
+    start_time_col = runtime.runtime_app_start_time_col(runtime_config)
     min_start_time = df_job[start_time_col].min()
 
-    end_time_col = static_figures.runtime_app_end_time_col(runtime_config)
+    end_time_col = runtime.runtime_app_end_time_col(runtime_config)
     max_end_time = df_job[end_time_col].max()
 
     for metric in req_metrics:
@@ -110,15 +133,15 @@ def runtime(loops_fn, out_jobs_fn, req_metrics, config_fn,
                 if step_id is not None:
                     fig_title = '-'.join([fig_title, str(step_id)])
 
-        fig = (static_figures
-               .generate_metric_timeline_fig(df, min_start_time,
-                                             max_end_time,
-                                             metric_name, step,
-                                             v_min=v_min,
-                                             v_max=v_max,
-                                             fig_title=fig_title,
-                                             metric_display_name=dsply_nm,
-                                             gpu_metrics_re=gpu_metrics_re))
+        fig = (runtime
+               .runtime_metric_timeline_fig(df, df_job, min_start_time,
+                                            max_end_time,
+                                            metric_name, step,
+                                            v_min=v_min,
+                                            v_max=v_max,
+                                            fig_title=fig_title,
+                                            metric_display_name=dsply_nm,
+                                            gpu_metrics_re=gpu_metrics_re))
 
         name = f'runtime_{metric}'
 
@@ -837,7 +860,7 @@ def parser_action(args):
 
     if args.format == "runtime":
 
-        runtime(args.loops_file, args.apps_file,
+        static_figures(args.loops_file, args.apps_file,
                 args.metrics, config_file_path, args.manual_range,
                 args.title, args.job_id, args.step_id, args.output)
 
