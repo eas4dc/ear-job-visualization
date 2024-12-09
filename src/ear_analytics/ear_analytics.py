@@ -861,8 +861,8 @@ def parser_action(args):
     if args.format == "runtime":
 
         static_figures(args.loops_file, args.apps_file,
-                args.metrics, config_file_path, args.manual_range,
-                args.title, args.job_id, args.step_id, args.output)
+                       args.metrics, config_file_path, args.manual_range,
+                       args.title, args.job_id, args.step_id, args.output)
 
     elif args.format == "ear2prv":
         events_data_path = None
