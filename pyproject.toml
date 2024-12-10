@@ -3,7 +3,7 @@ requires = ["setuptools>=45"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ear-job-visualize"
+name = "ear-job-visualization"
 authors = [
     {name = "Oriol Vidal", email = "oriol.vidal@eas4dc.com"},
     {name = "Jalal Lakhlili", email = "jalal.lakhlili@eas4dc.com"}
@@ -16,7 +16,7 @@ license = {text = "EPL-2.0"}
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
-version = "5.1.0"
+version = "5.2.0"
 dependencies = [
 	"matplotlib",
     "pandas",
@@ -24,4 +24,4 @@ dependencies = [
 ]
 
 [project.scripts]
-ear-job-visualizer = "ear_analytics.ear_analytics:main"
+ear-job-visualizer = "ear_job_visualize.ear_job_viz:main"

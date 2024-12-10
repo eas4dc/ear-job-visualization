@@ -28,16 +28,16 @@ from importlib_resources import files
 
 from itertools import chain
 
-from .metrics import print_runtime_metrics
+from ear_analytics.metrics import print_runtime_metrics
 
-from .utils import filter_df, function_compose
+from ear_analytics.utils import filter_df, function_compose
 
-from . import ear_data as edata
-from . import runtime
-from . import paraver
-from . import io_api
+from ear_analytics.events import read_events_configuration
 
-from .events import read_events_configuration
+from ear_analytics import ear_data as edata
+from ear_analytics import runtime
+from ear_analytics import paraver
+from ear_analytics import io_api
 
 
 def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
