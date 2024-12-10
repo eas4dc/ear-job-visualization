@@ -1,20 +1,5 @@
 {
-	"columns" : {
-		"app_info" : {
-			"job_id" : "JOBID",
-			"step_id" : "STEPID",
-			"app_id" : "APPID",
-			"start_time" : "START_TIME",
-			"end_time" : "END_TIME",
-			"node_name" : "NODENAME"
-		},
-		"loop_info" : {
-			"job_id" : "JOBID",
-			"step_id" : "STEPID",
-			"app_id" : "APPID",
-			"node_name" : "NODENAME",
-			"timestamp" : "TIMESTAMP"
-		},
+	"runtime" : {
 		"metrics" : {
 			"cpi" : {
 				"column_name" : "CPI",
@@ -80,6 +65,26 @@
 				"step" : 10,
 				"display_name" : "%MPI"
 			},
+			"io_mbs" : {
+				"column_name" : "IO_MBS",
+				"range" : [0, 1000],
+				"step" : 10,
+				"display_name" : "I/O MB/s"
+			},
+			"iteration_time" : {
+				"column_name" : "ITER_TIME_SEC",
+				"range" : [0, 10],
+				"step" : 1,
+				"display_name" : "Iteration time (s)"
+			},
+			"cpu_util" : {
+				"column_name" : "CPU_UTIL",
+				"range" : [0, 11200],
+				"step" : 100,
+				"display_name" : "CPU utilization (%)"
+			}
+		},
+		"gpu_metrics" : {
 			"gpu_power" : {
 				"column_name" : "GPU(\\d)_POWER_W",
 				"range" : [50, 150],
@@ -109,64 +114,6 @@
 				"range" : [0, 100],
 				"step" : 10,
 				"display_name" : "GPU memory util. (%)"
-			},
-			"io_mbs" : {
-				"column_name" : "IO_MBS",
-				"range" : [0, 1000],
-				"step" : 10,
-				"display_name" : "I/O MB/s"
-			},
-			"avg_gpu_power" : {
-				"column_name" : "avg_gpu_pwr",
-				"range" : [50, 150],
-				"step" : 50,
-				"display_name" : "Avg. GPU Power (W)"
-			},
-			"tot_gpu_power" : {
-				"column_name" : "tot_gpu_pwr",
-				"range" : [100, 480],
-				"step" : 300,
-				"display_name" : "Aggregated GPU Power (W)"
-			},
-			"avg_gpu_freq" : {
-				"column_name" : "avg_gpu_freq",
-				"range" : [0.8e6, 1.41e6],
-				"step" : 100000
-			},
-			"avg_gpu_memfreq" : {
-				"column_name" : "avg_gpu_memfreq",
-				"range" : [0.8e6, 1.41e6],
-				"step" : 100000
-			},
-			"avg_gpu_util" : {
-				"column_name" : "avg_gpu_util",
-				"range" : [0, 100],
-				"step" : 10
-			},
-			"avg_gpu_memutil" : {
-				"column_name" : "avg_gpu_memutil",
-				"range" : [0, 100],
-				"step" : 10
-			},
-			"time_sec" : {
-				"column_name" : "TIME_SEC",
-				"display_name" : "Execution time (s)"
-			},
-			"job_step" : {
-				"display_name" : "Job-Step"
-			},
-			"node_count" : {
-				"column_name" : "NODENAME",
-				"display_name" : "# Nodes",
-				"dtype" : "string"
-			},
-			"energy" : {
-				"column_name" : "energy",
-				"display_name" : "Total energy (J)"
-			},
-			"cpu_gflops" : {
-				"column_name" : "CPU-GFLOPS",
-				"display_name" : "Accumulated GFlop/s"
 			},
 			"dcgmi_gr_engine_active" : {
 				"column_name": "GPU(\\d)_gr_engine_active",
@@ -240,14 +187,43 @@
 				"step" : 10,
 				"display_name" : "PCIe Rx Bandwidth (B/s)"
 			},
-			"avg_gr_engine_active" : {
-				"column_name" : "avg_gr_engine_active",
-				"range" : [0, 100],
-				"step" : 10
+			"gpu_gflops" : {
+				"column_name" : "GPU(\\d)_GFLOPS",
+				"range" : [0, 5000],
+				"step" : 200,
+				"display_name" : "GPU GFLOPS"
+			},
+			"gpu_temperature" : {
+				"column_name" : "GPU(\\d)_TEMP",
+				"range" : [20, 150],
+				"step" : 10,
+				"display_name" : "GPU temperature (celsius)"
+			},
+			"gpu_mem_temperature" : {
+				"column_name" : "GPU(\\d)_MEMTEMP",
+				"range" : [20, 150],
+				"step" : 10,
+				"display_name" : "GPU memory temperature (celsius)"
 			}
 		},
+		"socket_metrics" : {
+			"temperature" : {
+				"column_name" : "TEMP(\\d)",
+				"range" : [20, 150],
+				"step" : 10,
+				"display_name" : "Temperature (celsius)"
+			}
+		},
+		"app_info" : {
+			"job_id" : "JOBID",
+			"step_id" : "STEPID",
+			"app_id" : "APPID",
+			"start_time" : "START_TIME",
+			"end_time" : "END_TIME",
+			"node_name" : "NODENAME"
+		},
 		"gpu_data" : {
-			"gpu_columns_re" : "GPU(\\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|UTIL_PERC|MEM_UTIL_PERC|(10[01][0-9]))"
+			"gpu_columns_re" : "GPU(\\d)_(POWER_W|FREQ_KHZ|MEM_FREQ_KHZ|UTIL_PERC|MEM_UTIL_PERC|GFLOPS|sm_occupancy|(sm|tensor|fp(64|32|16)|dram|gr_engine)_active|(nvlink|pcie)_(tx|rx)_bytes)"
 		}
 	},
 	"events" : {
