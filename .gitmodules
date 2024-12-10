@@ -1,0 +1,3 @@
+[submodule "src/ear_analytics"]
+	path = src/ear_analytics
+	url = git@github.com:eas4dc/ear_analytics.git
