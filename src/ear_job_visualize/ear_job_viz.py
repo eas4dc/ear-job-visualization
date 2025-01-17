@@ -834,7 +834,7 @@ def parser_action(args):
     if args.config_file:
         config_file_path = args.config_file
     else:
-        config_file_path = files('ear_analytics').joinpath('config.json')
+        config_file_path = files('ear_job_visualize').joinpath('config.json')
 
     # Print configuration file
     if args.print_config is True:
