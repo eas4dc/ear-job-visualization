@@ -134,8 +134,7 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
                     fig_title = '-'.join([fig_title, str(step_id)])
 
         fig = (runtime
-               .runtime_metric_timeline_fig(df, df_job, min_start_time,
-                                            max_end_time,
+               .runtime_metric_timeline_fig(df, df_job,
                                             metric_name, step,
                                             v_min=v_min,
                                             v_max=v_max,
@@ -861,8 +860,10 @@ def parser_action(args):
     if args.format == "runtime":
 
         static_figures(args.loops_file, args.apps_file,
-                       args.metrics, config_file_path, args.manual_range,
-                       args.title, args.job_id, args.step_id, args.output)
+                       args.metrics, config_file_path,
+                       rel_range=args.manual_range, title=args.title,
+                       job_id=args.job_id, step_id=args.step_id,
+                       output=args.output)
 
     elif args.format == "ear2prv":
         events_data_path = None
