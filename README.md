@@ -1,7 +1,7 @@
-# ear-job-visualize
+# ear-job-visualizer
 
 A tool to automatically read and visualise runtime data provided by the [EAR](https://gitlab.bsc.es/ear_team/ear/-/wikis/home) software.
-**ear-job-visualize** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
+**ear-job-visualizer** is a cli program written in Python which lets you plot the EAR data given by some of its commands or by using some report plug-in offered by the EAR Library (EARL).
 The main visualisation target is to show runtime metrics collected by the EAR Library in a timeline graph.
 
 By now this tool supports two kind of output formats:
@@ -22,6 +22,21 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 - matplotlib
 - importlib\_resources
 
+You also need to clone [ear\_analytics](https://github.com/eas4dc/ear_analytics) repository into `src` directory.
+The best way of having all required files is through cloning this project with its submodules[^1]:
+
+```bash
+git clone --recurse-submodules git@github.com:eas4dc/ear-job-visualization.git
+```
+
+If you already cloned the repository without the submodules, you must run the following command from this repository root directory: 
+
+```bash
+git submodule update --init
+```
+
+[^1]: See Pro Git book's [submodule chapter](https://git-scm.com/book/en/v2/Git-Tools-Submodules).
+
 By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
 > Be sure you have the the `eacct` command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
 
@@ -41,7 +56,7 @@ python -m build
 pip install .
 ```
 
-> You can change the destination path by export the variable 
+> You can change the destination path by exporting the variable [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUSERBASE).
 > Tool's developers may want to use `pip install -e .` to install the package in editable mode, so there is no need to reinstall every time you want to test a new feature.
 
 Then, you can type `ear-job-visualizer` and you should see the following:
@@ -63,7 +78,7 @@ You can install the tool to be available to other users in multiple ways, and ma
 2. Prepend the path to `site-packages` directory where you have installed the tool to `PYTHONPATH`.
 3. Prepend the path to `bin` directory where you have installed the tool to `PATH`.
 
-For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `virtualenv/install/dir/lib/python<version>/site-packages` to `PYTHONPATH` variable and `virtualenv/install/dir/bin` to `PATH`.
+For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `<prefix>/lib/python<version>/site-packages` to `PYTHONPATH` variable and `<prefix>/bin` to `PATH`[^2].
 
 ```lua
 # An example module file for Lmod
@@ -75,10 +90,12 @@ prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-pack
 prepend_path("PATH", "virtualenv/install/dir/bin")
 ```
 
+[^2]: `<prefix>` is the location where you have installed the tool, e.g., the virtual environment installation directory, the value of `$PYTHONUSERBASE` environment variable in the case you use it.
+
 ## Usage
 
 You must choose one of the three main required options.
-The one you may use most of times is `--format`, but the order followed in this document is useful for new users to understand how the tool works.
+The one you may use most of times is [`--format`](#--format), but the order followed in this document is useful for new users to understand how the tool works.
 
 ### `--print-config`
 
@@ -87,7 +104,7 @@ You can take the printed configuration as an example for making yours and use it
 The usage of this flag is very simple:
 
 ```bash
-ear-job-visualization --print-config > my_config.json
+ear-job-visualizer --print-config > my_config.json
 ```
 
 ### `--avail-metrics`
@@ -96,26 +113,26 @@ Shows metrics names supported by tool.
 These supported metrics are taken from the configuration file, so you can view the default supported metrics with:
 
 ```bash
-ear-job-analytics --avail-metrics
+ear-job-visualizer --avail-metrics
 ```
 
-You can also check you own configuration file:
+You can also check your own configuration file:
 
 ```bash
-ear-job-analytics --avail-metrics -c my_config.json
+ear-job-visualizer --avail-metrics -c my_config.json
 ```
 
 ### `--format`
 
 This option is in fact used to request for plotting (or converting) data.
 
-Choices for this option are either `runtime`, `ear2prv`, and each one enables each of the tool's features.
+Choices for this option are either [`runtime`](#runtime-format) or [`ear2prv`](#ear2prv-format), and each one enables each of the tool's features.
 Read below sections for a detailed description of each one.
 
-The `runtime` option is the one used to generate static images, while `ear2prv` refers the tool's interface to output data following the Paraver Trace Format.
+The **`runtime`** option is the one used to generate **static images**, while **`ear2prv`** refers the tool's interface to **output data following the Paraver Trace Format**.
 Both format options share a subset of arguments.
 
-The `--job-id` flag is **mandatory** to be specified.
+The **`--job-id`** flag is **mandatory** to be specified.
 It is used by the tool to filter input data in the case it contains more than one Job ID, as it currently only supports single job visualisation.
 Moreover, you can set the `--step-id` flag to filter also the Step ID, which is **mandatory for `--format runtime` option** and **optional for `--format ear2prv`**, since the latter supports multiple step data in the input.
 
@@ -126,6 +143,7 @@ If you want to prevent the removal of that files, you can add the `--keep-csv` f
 If you know which `eacct` invokations are required to visualise the data, you can use `--loops-file` and `--apps-file` options to specify where the tool can find the data to be filtered and used.
 **Both of them are required if you are going to use the tool escaping the internal use of the `eacct` command.**
 The former is obtained through `eacct -j <jobid>[.stepid] -r -c <loops_file>` and the latter through `eacct -j <jobid>[.stepid] -l -c <apps_file>`.
+
 You can alternatively obtain both files by using one of the EAR [report plug-ins](https://gitlab.bsc.es/ear_team/ear/-/wikis/Report#csv) distributed with EAR.
 This option is useful when you already have data for multiple jobs and/or steps together and you want to work on it in several ways because naturally it's more fast to work directly on a file than invoking a command to make a query to a Database, storing the output on a file, and then read such file.
 This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.
@@ -135,14 +153,54 @@ This option is also useful since it lets you work on a host where you can't acce
 Generate a heatmap-based graph for each metric specified by `--metrics` argument (i.e., space separated list of metric names).
 Note that the accepted metrics are specified in the [configuration](Configuration) file and you can request the list trough the `--avail-metrics` flag.
 
-> This option just supports plotting data for a single Job-Step ID with just one Application ID (i.e., non-workflow use case),
-> so both `--job-id` and `--step-id` flags are required.
+> This option just supports plotting data for a single Job-Step ID, thus **both `--job-id` and `--step-id` flags are required**.
 
 The resulting figure (for each requested metric) will be a timeline where for each node your application had used you will see a heatmap showing an intuitive visualisation about the value of the metric during application execution.
 All nodes visualised share the same timeline, which makes this command useful to check the application behaviour over all of them.
-If you request GPU metrics, the graph will show you per-GPU data.
+Below there is an example showing how to generate images for a two-node MPI application, the I/O rate, the GFLOPS and the percentage of time spent in MPI calls along the execution time.
 
-By default, the range to compute each metric runtime gradient is configured at *config.json*, but you can tell the tool to compute the gradient based on the range of the current data by typing `--relative-range` option before requestingthe metrics list.
+```bash
+ear-job-visualizer --format runtime --job-id <> --step-id <> -m io_mbs gflops perc_mpi
+```
+
+> Use [`--avail-metrics`](#--avail-metrics) flag to view tool's supported metrics and the name you must use to retrieve them.
+
+The above command line generates the following figures:
+
+![An example of OpenRadioss GFLOPS across the execution time.]()
+
+![An example of OpenRadioss I/O rate across the execution time.]()
+
+![An example of OpenRadioss %MPI rate across the execution time.]()
+
+#### GPU data
+
+If you request GPU metrics, the graph will show you per-GPU data.
+For each requested GPU metric the tool filters those GPUs which have a constant zero value along the execution time.
+
+```bash
+ear-job-visualizer --format runtime --job-id 69478 --step-id 0 --loops-file /examples/runtime_format/69478_loops.csv --apps-file /examples/runtime_format/69478_apps.csv -m gpu_util gpu_power -o 69478.0.png
+```
+
+The above command line generates the following figures:
+
+![An example of GPU utilization of a single node application using just one GPU device.](/examples/runtime_format/runtime_gpu_util-69478.0.png)
+
+![An example of GPU power consumption of a single node application using just one GPU device.](/examples/runtime_format/runtime_gpu_power-69478.0.png)
+
+You can use the EAR `dcgmi.so` [report plug-in](https://gitlab.bsc.es/ear_team/ear/-/wikis/User-guide#runtime-report-plug-ins) to generate CSV files containing extra GPU metrics taken from either[^3]:
+
+- The NVIDIA® Data Center GPU Manager ([DCGM](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics)).
+- NVIDIA Management Library ([NVML](https://developer.nvidia.com/management-library-nvml)) [GPM metrics](https://docs.nvidia.com/deploy/nvml-api/group__nvmlGpmEnums.html#group__nvmlGpmEnums).
+
+You can use later those csv files directly by invoking the tool with both `--loops-file` and `--apps-file` flags as well.
+
+[^3]: The source of these metrics is transparent from the user point of view. In fact is EAR who takes data from the available source. Metrics are the same regardless the interface used.
+
+#### Data visualization colormap range
+
+By default, the colormap of the data is computed from the data value range found in the source, i.e., a colormap is built taken the minimum and maximum values of the requested metric along the runtime across all involed nodes/GPUs.
+However, you can change this behaviour by passing the `--manual-range` flag. Thus, the tool will use the range for the requested metric specified at the [Configuration](#Configuration) file.
 
 ### *ear2prv* format
 
@@ -150,11 +208,15 @@ Convert job runtime data gathered from EARL to Paraver Trace Format.
 In this case, all metrics found in the input data are reported to the trace file.
 Moreover, you can have in the same trace all steps and applications (e.g., a workflow) of your job, so just the `--job-id` flag is required.
 
+Keep in mind that the trace file generated by this tool have the following mapping between EAR data and the [Paraver Trace Format](https://tools.bsc.es/doc/1370.pdf):
+- As EAR data is reported at the node-level, EAR node data can be visualized at the Paraver task-level (Thread 1 is used).
+- The tool uses the thread-level to put the GPU data.
+
 You can find two examples of [Paraver Config Files](examples) to easily start working with the output data generated by this option.
 
 ## Configuration
 
-Check the [config.json](src/ear_analytics/config.json) file.
+Check the [config.json](src/ear_job_visualize/config.json) file.
 
 ## Contact
 
