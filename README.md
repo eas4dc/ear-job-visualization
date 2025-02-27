@@ -51,9 +51,17 @@ You can also use the [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.
 
 ```bash
 pip install -U pip
-pip install build setuptools
+pip install build setuptools wheel
 python -m build
 pip install .
+```
+
+If no connection is available, you can use the `--no-isolation` option when building the package.
+If no `wheel` package is available, you can checkout the `compatibility` branch and:
+
+```bash
+python setup.py sdist
+pip3.9 install --user --no-deps --no-build-isolation --no-use-pep517 dist/ear-job-visualization-5.2.0.tar.gz
 ```
 
 > You can change the destination path by exporting the variable [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUSERBASE).
