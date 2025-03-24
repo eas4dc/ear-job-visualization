@@ -148,6 +148,19 @@ You can alternatively obtain both files by using one of the EAR [report plug-ins
 This option is useful when you already have data for multiple jobs and/or steps together and you want to work on it in several ways because naturally it's more fast to work directly on a file than invoking a command to make a query to a Database, storing the output on a file, and then read such file.
 This option is also useful since it lets you work on a host where you can't access EAR Database nor EAR is installed.
 
+Mentioned `--loops-file` and `--apps-file` options accept also a path to a directory instead of a filename.
+This is useful because when you request EAR to generate csv files through the `--ear-user-db=<csv-filename>` flag, one csv file for each compute node is created.
+Therefore, for each compute node your application ran on, files `<csv-filename>_<nodename>_loops.csv` and `<csv-filename>_<nodename>_apps.csv` are created.
+Consequently, if you want to visualize runtime metrics for your specific multi-node application, you may need to move all *loops* and *apps* data into a single directory, respectively, and pass such directories to the tool's `loops-file` and `apps-file.`
+
+```bash
+mkdir apps_dir && mv *_apps.csv apps_dir
+
+mkdir loops_dir && mv *_loops.csv loops_dir
+
+ear-job-visualizer --format <format-option> --job-id <job-id> --loops-file loops_dir --apps_file apps_dir <format-specific-options>
+```
+
 ### *runtime* format
 
 Generate a heatmap-based graph for each metric specified by `--metrics` argument (i.e., space separated list of metric names).
