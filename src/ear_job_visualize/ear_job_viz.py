@@ -14,7 +14,7 @@
 
 import sys
 from argparse import HelpFormatter, ArgumentParser
-from os import path, system
+from os import path, system, remove
 import subprocess
 from time import strftime, localtime
 import re
@@ -794,6 +794,13 @@ def eacct(result_format, jobid, stepid=None, ear_events=False):
         csv_loops_file = f'tmp_{jobid}_{stepid}_loops.csv'
         csv_apps_file = f'tmp_{jobid}_{stepid}_apps.csv'
         job_fmt = f'{jobid}.{stepid}'
+
+    if path.exists(csv_loops_file):
+        print(f'{csv_loops_file} already exists. Removing...')
+        remove(csv_loops_file)
+    if path.exists(csv_apps_file):
+        print(f'{csv_apps_file} already exists. Removing...')
+        remove(csv_apps_file)
 
     if result_format == 'runtime' or result_format == "ear2prv":
         cmd_loops = ["eacct", "-j", job_fmt, "-r", "-c", csv_loops_file]
