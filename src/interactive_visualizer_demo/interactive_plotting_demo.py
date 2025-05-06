@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 # %%
 
 # Default configuration
-default_config = {
+_default_config = {
     "colormap": {
         "v_min": -1,
         "v_max": 1,
@@ -31,6 +31,31 @@ default_config = {
         "verbose": 0,
     },
 }
+
+_interactive_backends = [
+    "QtAgg",
+    "GTK3Agg",
+    "GTK4Agg",
+    "TkAgg",
+    "MacOSX",
+    "GTK3Cairo",
+    "GTK4Cairo",
+    "wxAgg",
+]
+
+
+def set_interactive_backend():
+
+    for backend in _interactive_backends:
+        try:
+            plt.switch_backend(backend)
+            break
+        except ImportError:
+            continue
+
+    if plt.get_backend() not in _interactive_backends:
+        raise ImportError("No interactive backends found")
+
 
 def check_config(config):
     """Check if the configuration is valid"""
@@ -57,9 +82,13 @@ def check_config(config):
     if "interactive" not in figure or not isinstance(figure["interactive"], bool):
         raise ValueError("Figure must contain 'interactive' key set to true or false.")
     if "title" not in figure or not isinstance(figure["title"], list):
-        raise ValueError("Figure config must contain a 'title' key. The value should be a list containing either strings or None.")
+        raise ValueError(
+            "Figure config must contain a 'title' key. The value should be a list containing either strings or None."
+        )
     if "ylabel" not in figure or not isinstance(figure["ylabel"], list):
-        raise ValueError("Figure config must contain a 'ylabel' key. The value should be a list containing either strings or None.")
+        raise ValueError(
+            "Figure config must contain a 'ylabel' key. The value should be a list containing either strings or None."
+        )
 
     # Check monitoring settings
     monitoring = config.get("monitoring", {})
@@ -69,6 +98,7 @@ def check_config(config):
         raise ValueError("Monitoring must contain 'interval' key.")
     if "verbose" not in monitoring:
         raise ValueError("Monitoring must contain 'verbose' key.")
+
 
 def read_and_process_data(filepath):
     """Read data from file and extract x and y values"""
@@ -207,15 +237,15 @@ def create_metric_plot(ydata, config=None, fig=None, grid=None, cbar=None):
     """
     # Use default configuration if none is provided
     if config is None:
-        config = default_config
-    
+        config = _default_config
+
     # Check the configuration for validity
     check_config(config)
 
     # Extract colormap and figure settings from the config
     nrows = config["figure"]["nrows"]
     interactive = config["figure"]["interactive"]
-    
+
     # Create or reuse the figure and grid
     if fig is None or not plt.fignum_exists(fig.number):
         fig, grid = create_figure_with_grid(nrows=nrows)
@@ -322,17 +352,16 @@ def monitor_and_replot(file_path, config=None):
 
 
 def main(file_data_path, configuration):
-    
-    plt.ion() # Enable interactive mode, which allows for dynamic updates
+
+    set_interactive_backend()  # Set the interactive backend for matplotlib
+    plt.ion()  # Enable interactive mode, which allows for dynamic updates
     monitor_and_replot(file_data_path, configuration)
 
 
 # %%
 
 if __name__ == "__main__":
-    # Set matplotlib backend to avoid GUI issues
-    # mpl.use("gtk3agg")  # or "TkAgg", "Agg", etc. depending on your environment
-    
+
     file_data_path = "fake_metric_data.txt"  # Path to your data file
 
     configuration = {
@@ -349,7 +378,7 @@ if __name__ == "__main__":
             "ylabel": ["Test Label 1", "Test Label 2"],
         },
         "monitoring": {
-            "interval": 0.5, # Interval in seconds
+            "interval": 0.5,  # Interval in seconds
             "verbose": 0,
         },
     }
