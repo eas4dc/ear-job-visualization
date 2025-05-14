@@ -35,6 +35,22 @@ If you already cloned the repository without the submodules, you must run the fo
 git submodule update --init
 ```
 
+If you do not have internet access you can clone this repository and its dependencies with the following commands:
+
+```bash
+git clone --bare git@github.com:eas4dc/ear-job-visualization.git
+git clone --bare https://github.com/eas4dc/ear_analytics.git
+```
+After scp your bare repositories to the machine, and:
+
+```bash
+git clone ear-job-visualization.git
+git clone ear_analytics.git
+cd ear-job-visualization/src
+rmdir ear_analytics
+ls -s ../../ear_analytics
+```
+
 [^1]: See Pro Git book's [submodule chapter](https://git-scm.com/book/en/v2/Git-Tools-Submodules).
 
 By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
@@ -51,7 +67,7 @@ You can also use the [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.
 
 ```bash
 pip install -U pip
-pip install build setuptools
+pip install build setuptools wheel
 python -m build
 pip install .
 ```
@@ -78,18 +94,20 @@ You can install the tool to be available to other users in multiple ways, and ma
 2. Prepend the path to `site-packages` directory where you have installed the tool to `PYTHONPATH`.
 3. Prepend the path to `bin` directory where you have installed the tool to `PATH`.
 
-For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `<prefix>/lib/python<version>/site-packages` to `PYTHONPATH` variable and `<prefix>/bin` to `PATH`[^2].
+For example, if you have installed the tool in a virtual environment located in a directory where other users have read and execute permissions, you may want to provide users a module file which prepends `<prefix>/lib/python<version>/site-packages` to `PYTHONPATH` variable and `<prefix>/bin` to `PATH`[^2]. You can use the python script create_module.py to generate the module file. 
 
 ```lua
 # An example module file for Lmod
 
 whatis("Enables the usage of ear-job-visualizer, a tool for visualizing performance metrics collected by EAR.")
 
-depends_on("") # Add here the required python module you used for building the package.
+-- Add here the required python module you used for building the package.
+-- depends_on("")
 prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-packages")
 prepend_path("PATH", "virtualenv/install/dir/bin")
 ```
 
+Save this file as eas-tools.lua, typically in the EAR/installation/path/etc/module, and load it with the command `module load eas-tools`.
 [^2]: `<prefix>` is the location where you have installed the tool, e.g., the virtual environment installation directory, the value of `$PYTHONUSERBASE` environment variable in the case you use it.
 
 ## Usage
