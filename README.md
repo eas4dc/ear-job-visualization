@@ -22,17 +22,18 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 - matplotlib
 - importlib\_resources
 
-You also need to clone [ear\_analytics](https://github.com/eas4dc/ear_analytics) repository into `src` directory.
-The best way of having all required files is through cloning this project with its submodules[^1]:
+By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
+> Be sure you have the the `eacct` command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
+
+If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
+You can also provide directly input files if the `eacct` command is unable, [read below](#providing-files-instead-of-using-internally-eacct).
+
+## Installation
+
+Clone the repository with its submodules, since it depends on the [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core):
 
 ```bash
 git clone --recurse-submodules git@github.com:eas4dc/ear-job-visualization.git
-```
-
-If you already cloned the repository without the submodules, you must run the following command from this repository root directory: 
-
-```bash
-git submodule update --init
 ```
 
 If you do not have internet access you can clone this repository and its dependencies with the following commands:
@@ -50,16 +51,6 @@ cd ear-job-visualization/src
 rmdir ear_analytics
 ls -s ../../ear_analytics
 ```
-
-[^1]: See Pro Git book's [submodule chapter](https://git-scm.com/book/en/v2/Git-Tools-Submodules).
-
-By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
-> Be sure you have the the `eacct` command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
-
-If you have some trouble, ask your system administrator if there is some problem with the EAR Database.
-You can also provide directly input files if the `eacct` command is unable, [read below](#providing-files-instead-of-using-internally-eacct).
-
-## Installation
 
 This repository contains all recipes to build and install the package.
 You need **build** and **setuptools** packages to properly build and install it.
