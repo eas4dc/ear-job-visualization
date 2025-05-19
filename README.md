@@ -36,6 +36,8 @@ Clone the repository with its submodules, since it depends on the [ear\_analytic
 git clone --recurse-submodules git@github.com:eas4dc/ear-job-visualization.git
 ```
 
+If you already cloned this repository without using `--recurse-submodules` flag, you need to manually install the [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core) repository into the `src` directory, located at the root of this one.
+
 If you do not have internet access you can clone this repository and its dependencies with the following commands:
 
 ```bash
