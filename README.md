@@ -21,6 +21,7 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 - pandas
 - matplotlib
 - importlib\_resources
+- rich
 
 By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
 > Be sure you have the the `eacct` command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
