@@ -21,6 +21,7 @@ dependencies = [
 	"matplotlib",
     "pandas",
     "importlib_resources",
+	"rich"
 ]
 
 [project.scripts]
