@@ -34,7 +34,7 @@ You can also provide directly input files if the `eacct` command is unable, [rea
 Clone the repository with its submodules, since it depends on the [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core):
 
 ```bash
-git clone --recurse-submodules git@github.com:eas4dc/ear-job-visualization.git
+git clone --recurse-submodules https://github.com/eas4dc/ear-job-visualization.git
 ```
 
 If you already cloned this repository without using `--recurse-submodules` flag, you need to manually install the [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core) repository into the `src` directory, located at the root of this one.
@@ -42,7 +42,7 @@ If you already cloned this repository without using `--recurse-submodules` flag,
 If you do not have internet access you can clone this repository and its dependencies with the following commands:
 
 ```bash
-git clone --bare git@github.com:eas4dc/ear-job-visualization.git
+git clone --bare https://github.com/eas4dc/ear-job-visualization.git
 git clone --bare https://github.com/eas4dc/ear_analytics.git
 ```
 After scp your bare repositories to the machine, and:
