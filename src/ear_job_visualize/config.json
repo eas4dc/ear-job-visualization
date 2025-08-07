@@ -218,8 +218,8 @@
 			"job_id" : "JOBID",
 			"step_id" : "STEPID",
 			"app_id" : "APPID",
-			"start_time" : "START_TIME",
-			"end_time" : "END_TIME",
+			"start_time" : "JOB_EARL_START_TIME",
+			"end_time" : "JOB_EARL_END_TIME",
 			"node_name" : "NODENAME"
 		},
 		"gpu_data" : {
@@ -278,8 +278,8 @@
 			"STEPID" : "Int64",
 			"APPID" : "Int64",
 			"JOBNAME" : "string",
-			"START_TIME" : "Int64",
-			"END_TIME" : "Int64"
+			"JOB_EARL_START_TIME" : "Int64",
+			"JOB_EARL_END_TIME" : "Int64"
 		},
 		"loop" : {
 			"JOBID" : "Int64",
