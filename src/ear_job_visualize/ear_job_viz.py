@@ -98,10 +98,10 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
 
     # We need the application start time
     start_time_col = runtime.runtime_app_start_time_col(runtime_config)
-    min_start_time = df_job[start_time_col].min()
+    # min_start_time = df_job[start_time_col].min()
 
     end_time_col = runtime.runtime_app_end_time_col(runtime_config)
-    max_end_time = df_job[end_time_col].max()
+    # max_end_time = df_job[end_time_col].max()
 
     for metric in req_metrics:
         # Get a valid EAR column name
@@ -140,7 +140,9 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
                                             v_max=v_max,
                                             fig_title=fig_title,
                                             metric_display_name=dsply_nm,
-                                            gpu_metrics_re=gpu_metrics_re))
+                                            gpu_metrics_re=gpu_metrics_re,
+                                            start_time_colname=start_time_col,
+                                            end_time_colname=end_time_col))
 
         name = f'runtime_{metric}'
 
@@ -202,7 +204,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
 
             task_start_time = df_job.loc[(df_job['JOBID'] == j) &
                                          (df_job['STEPID'] == s) &
-                                         (df_job['APPID'] == a)]['START_TIME']
+                                         (df_job['APPID'] == a)][start_time_colname]
 
             if not task_start_time.empty:
                 jobs += [j]
@@ -232,7 +234,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
 
     def insert_jobdata(df_loops, df_job):
         return df_loops.merge(df_job[['JOBID', 'STEPID', 'APPID',
-                                      'JOBNAME', 'START_TIME', 'END_TIME']])
+                                      'JOBNAME', start_time_colname,
+                                      end_time_colname]])
 
     def print_df(df):
         """
@@ -246,6 +249,11 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
 
     # Read the Job data
     job_data_config = paraver.ear2prv_job_config(ear2prv_config)
+
+    # The runtime section of configuration is useful for getting column names
+    runtime_config = runtime.runtime_get_configuration(config_fn)
+    start_time_colname = runtime.runtime_app_start_time_col(runtime_config)
+    end_time_colname = runtime.runtime_app_end_time_col(runtime_config)
 
     df_job = (io_api.read_data(job_data_fn, sep=';')
               .pipe(filter_df, JOBID=job_id, id=job_id,
@@ -264,7 +272,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
                 .assign(
                     # Paraver works at microsecond granularity
                     time=lambda df: (df.TIMESTAMP -
-                                     df_job.START_TIME.min()) * 1000000
+                                     df_job[start_time_colname].min()) *
+                    1000000
                     )
                 .pipe(multiply_floats_by_1000000)
                 .pipe(insert_jobdata, df_job)
@@ -346,8 +355,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
     else:
         n_nodes = node_info.size
 
-        f_time = (df_job.END_TIME.max() -
-                  df_job.START_TIME.min()) * 1000000
+        f_time = (df_job[end_time_colname].max() -
+                  df_job[start_time_colname].min()) * 1000000
 
         print(f'Number of nodes: {n_nodes}. Total trace duration: {f_time}')
 
@@ -494,7 +503,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
     # #### Generating the Paraver trace header
 
     date_time = strftime('%d/%m/%y at %H:%M',
-                         localtime(np.min(df_job.START_TIME)))
+                         localtime(np.min(df_job[start_time_colname])))
 
     file_trace_hdr = (f'#Paraver ({date_time}):{f_time}'
                       f':0:{n_appl}:{appl_list_str}')
@@ -518,7 +527,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
                                       'dcgm_nvlink_rx_bytes',
                                       'dcgm_pcie_tx_bytes',
                                       'dcgm_pcie_rx_bytes', 'TIMESTAMP',
-                                      'START_TIME', 'END_TIME']
+                                      'JOB_EARL_START_TIME', 'JOB_EARL_END_TIME']
                              ).columns
                )
 
@@ -609,15 +618,15 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
         return df.groupby(['app_id', 'task_id'])
 
     def df_get_start_end_times(df_groupby):
-        return df_groupby[['START_TIME', 'END_TIME']]
+        return df_groupby[[start_time_colname, end_time_colname]]
 
     df_states = (df_loops
                  .pipe(groupby_app_task)
                  .pipe(df_get_start_end_times)
                  .max()
                  .assign(state_id=1,  # 1 -> Running
-                         START_TIME=lambda df: (df.START_TIME - df_job.START_TIME.min()) * 1000000,
-                         END_TIME=lambda df: (df.END_TIME - df_job.START_TIME.min()) * 1000000)
+                         START_TIME=lambda df: (df[start_time_colname] - df_job[start_time_colname].min()) * 1000000,
+                         END_TIME=lambda df: (df[end_time_colname] - df_job[start_time_colname].min()) * 1000000)
                  .reset_index())
 
     smft = '1:0:{app_id}:{task_id}:1:{START_TIME}:{END_TIME}:{state_id}'.format
@@ -628,15 +637,15 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
 
     # Start time and end time events
     start_end_event_ids = {event: columns.get_loc(event)
-                           for event in ['START_TIME', 'END_TIME']}
+                           for event in [start_time_colname, end_time_colname]}
 
     df_start_end_time = (df_loops
-                         .groupby(['app_id', 'task_id'])[['START_TIME', 'END_TIME']].max()
+                         .groupby(['app_id', 'task_id'])[[start_time_colname, end_time_colname]].max()
                          .reset_index()
                          .melt(id_vars=['app_id', 'task_id'])
                          .assign(
                              event_id=lambda df: df.variable.map(lambda x: start_end_event_ids[x]),
-                             time=lambda df: (df.value - df_job.START_TIME.min()) * 1000000
+                             time=lambda df: (df.value - df_job[start_time_colname].min()) * 1000000
                              )
                          .drop(columns='variable')
                          )
