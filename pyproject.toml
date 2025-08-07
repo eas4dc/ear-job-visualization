@@ -21,7 +21,8 @@ dependencies = [
 	"matplotlib",
     "pandas",
     "importlib_resources",
-	"rich"
+	"rich",
+    "ear_analytics_core @ git+https://github.com/eas4dc/ear_analytics_core@dev"
 ]
 
 [project.scripts]
