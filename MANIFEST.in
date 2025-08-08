@@ -1,5 +1,1 @@
 include src/ear_job_visualize/config.json
-include src/ear_job_visualize/templates/main.tex.template
-include src/ear_job_visualize/templates/text/agg_gpupwr.tex
-include src/ear_job_visualize/templates/text/gpu_util.tex
-include src/ear_job_visualize/templates/text/job_gpu_summary.tex
