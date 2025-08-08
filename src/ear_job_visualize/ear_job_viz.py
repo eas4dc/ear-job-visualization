@@ -28,16 +28,16 @@ from importlib_resources import files
 
 from itertools import chain
 
-from ear_analytics.metrics import print_runtime_metrics
+from ear_analytics_core.metrics import print_runtime_metrics
 
-from ear_analytics.utils import filter_df, function_compose
+from ear_analytics_core.utils import filter_df, function_compose
 
-from ear_analytics.events import read_events_configuration
+from ear_analytics_core.events import read_events_configuration
 
-from ear_analytics import ear_data as edata
-from ear_analytics import runtime
-from ear_analytics import paraver
-from ear_analytics import io_api
+from ear_analytics_core import ear_data as edata
+from ear_analytics_core import runtime
+from ear_analytics_core import paraver
+from ear_analytics_core import io_api
 
 
 def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
@@ -70,7 +70,6 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
     and `avail_metrics` supported.
     """
     runtime_config = runtime.runtime_get_configuration(config_fn)
-    print(config_fn)
     node_metrics = (runtime
                     .runtime_node_metrics_configuration(runtime_config))
     gpu_metrics = (runtime
@@ -136,6 +135,7 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
         fig = (runtime
                .runtime_metric_timeline_fig(df, df_job,
                                             metric_name, step,
+                                            runtime_config,
                                             v_min=v_min,
                                             v_max=v_max,
                                             fig_title=fig_title,
@@ -527,7 +527,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
                                       'dcgm_nvlink_rx_bytes',
                                       'dcgm_pcie_tx_bytes',
                                       'dcgm_pcie_rx_bytes', 'TIMESTAMP',
-                                      'JOB_EARL_START_TIME', 'JOB_EARL_END_TIME']
+                                      'START_TIME', 'END_TIME']
                              ).columns
                )
 
