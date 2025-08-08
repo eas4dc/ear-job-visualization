@@ -5,3 +5,4 @@ UNKNOWN.egg-info/
 /dist/
 src/ear_job_analytics.egg-info/
 src/ear_job_visualization.egg-info/
+ear_job_visualization.egg-info/
