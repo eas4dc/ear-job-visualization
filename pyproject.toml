@@ -12,16 +12,18 @@ description = "High level support for read and visualize job information given b
 readme = "README.md"
 # requires-python = "<3.9"
 keywords = ["data", "visualization", "hpc", "analysis", "ear", "paraver"]
-license = {text = "EPL-2.0"}
+license = "EPL-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
 version = "5.2.0"
 dependencies = [
-	"matplotlib",
+	"matplotlib>3.4",
     "pandas",
     "importlib_resources",
-	"rich"
+	"rich",
+    "ear_analytics_core @ git+https://github.com/eas4dc/ear_analytics_core@dev"
 ]
 
 [project.scripts]
