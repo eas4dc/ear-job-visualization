@@ -23,7 +23,7 @@ dependencies = [
     "pandas",
     "importlib_resources",
 	"rich",
-    "ear_analytics_core @ git+https://github.com/eas4dc/ear_analytics_core@dev"
+    "ear_analytics_core @ git+https://github.com/eas4dc/ear_analytics_core@v6"
 ]
 
 [project.scripts]
