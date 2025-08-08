@@ -527,7 +527,8 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
                                       'dcgm_nvlink_rx_bytes',
                                       'dcgm_pcie_tx_bytes',
                                       'dcgm_pcie_rx_bytes', 'TIMESTAMP',
-                                      'START_TIME', 'END_TIME']
+                                      'JOB_EARL_START_TIME',
+                                      'JOB_EARL_END_TIME']
                              ).columns
                )
 
@@ -924,7 +925,7 @@ def build_parser():
                             visualizing EAR job data.''',
                             formatter_class=formatter,
                             epilog='Contact: support@eas4dc.com')
-    parser.add_argument('--version', action='version', version='%(prog)s 5.1')
+    parser.add_argument('--version', action='version', version='%(prog)s 6.0')
 
     main_group = parser.add_argument_group('Main options',
                                            description='''The main option flags
