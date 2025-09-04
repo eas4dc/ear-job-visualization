@@ -18,10 +18,13 @@ You can find [here](https://tools.bsc.es/paraver) more information about how Par
 
 ## Requirements
 
-- pandas
-- matplotlib
+This is a non-exhaustive list of the package dependencies.
+There is a [dedicated section](#installation) with specific instructions for installing the tool.
+
+- pandas[performance,plot,output-formatting]
 - importlib\_resources
 - rich
+- [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core) (Versions must match)
 
 By default, the tool calls internally the EAR account command (i.e., `eacct`) with proper options in order to get the corresponding data to be sent to the tool's functionalities.
 > Be sure you have the the `eacct` command on your path, and also check whether `EAR_ETC` environment variable is set properly. By loading `ear` module you should have all the needed stuff ready.
@@ -31,40 +34,23 @@ You can also provide directly input files if the `eacct` command is unable, [rea
 
 ## Installation
 
-Clone the repository with its submodules, since it depends on the [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core):
+We are working on provide different methods for installing the tool in order to fit any use cases.
+Subsections will be added for each one.
 
-```bash
-git clone --recurse-submodules https://github.com/eas4dc/ear-job-visualization.git
-```
+> **Note** You must install a version which matches the EAR version you are getting data from. For example, for any EAR *v5.x.y* you are using, you can use any of the `ear-job-visualizer` *v5.x'.y'*.
+> If you decide to install the tool by cloning the repository, you may need to switch the branch. `master` branch points to the [latest release](https://github.com/eas4dc/ear-job-visualization/releases/latest). Finally, there is a `vX` branch for each EAR major version the tool is compatible with. **These branches are stable**.
 
-If you already cloned this repository without using `--recurse-submodules` flag, you need to manually install the [ear\_analytics\_core](https://github.com/eas4dc/ear_analytics_core) repository into the `src` directory, located at the root of this one.
-
-If you do not have internet access you can clone this repository and its dependencies with the following commands:
-
-```bash
-git clone --bare https://github.com/eas4dc/ear-job-visualization.git
-git clone --bare https://github.com/eas4dc/ear_analytics.git
-```
-After scp your bare repositories to the machine, and:
-
-```bash
-git clone ear-job-visualization.git
-git clone ear_analytics.git
-cd ear-job-visualization/src
-rmdir ear_analytics
-ls -s ../../ear_analytics
-```
+### Install directly from the source code in a virtual environment
 
 This repository contains all recipes to build and install the package.
 You need **build** and **setuptools** packages to properly build and install it.
 You can also use the [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUSERBASE) environment variable to modify the target directory for the installation.
 
-```bash
-pip install -U pip
-pip install build setuptools wheel
-python -m build
-pip install .
-```
+1. Clone this repository or download the source code from the release which matches your EAR version.
+2. Create a virtual environment and activate it: `python -m venv my_env && source my-env/bin/activate`.
+3. Update pip, and install required modules for packaging: `pip install -U pip && pip install build setuptools wheel`.
+4. Build the package: `python -m build`.
+5. Install it: `pip install .`.
 
 > You can change the destination path by exporting the variable [`PYTHONUSERBASE`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUSERBASE).
 > Tool's developers may want to use `pip install -e .` to install the package in editable mode, so there is no need to reinstall every time you want to test a new feature.
@@ -80,7 +66,7 @@ usage: ear-job-visualizer [-h] [--version] [-c CONFIG_FILE]
 ear-job-visualizer: error: one of the arguments --format --print-config --avail-metrics is required
 ```
 
-### Make the package usable by other users
+#### Make the package usable by other users
 
 You can install the tool to be available to other users in multiple ways, and maybe you know a better approach for doing so or which fits much better to your use case, but here there is explained a way we found useful to fit on systems where we put this tool in production.
 
