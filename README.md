@@ -38,7 +38,7 @@ We are working on provide different methods for installing the tool in order to 
 Subsections will be added for each one.
 
 > **Note** You must install a version which matches the EAR version you are getting data from. For example, for any EAR *v5.x.y* you are using, you can use any of the `ear-job-visualizer` *v5.x'.y'*.
-> If you decide to install the tool by cloning the repository, you may need to switch the branch. `master` branch points to the [latest release](https://github.com/eas4dc/ear-job-visualization/releases/latest). Finally, there is a `vX` branch for each EAR major version the tool is compatible with. **These branches are stable**.
+> If you decide to install the tool by cloning the repository, you may need to switch the branch. `main` branch points to the [latest release](https://github.com/eas4dc/ear-job-visualization/releases/latest). Finally, there is a `vX` branch for each EAR major version the tool is compatible with. **These branches are stable**.
 
 ### Install directly from the source code in a virtual environment
 
