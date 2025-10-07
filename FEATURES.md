@@ -2,8 +2,6 @@
 
 ## Features Overview
 
-## Visualization Features
-
 ### Loop and Application Signatures
 - **Loop Signatures**: Generate visualizations for loop-level performance metrics.
 - **Application Signatures**: Create application-level performance signatures for detailed analysis.
