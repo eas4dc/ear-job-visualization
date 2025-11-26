@@ -1,24 +1,24 @@
-# ear-job-visualizer Features
+### Runtime Visualizations
+- **Loop Metrics Heatmaps**: Generate per-node timelines of loop-level metrics (GFLOPS, CPI, %MPI, etc.) as PNG/PDF figures.
+- **GPU Metrics Support**: Plot GPU-specific metrics and automatically hide GPUs that stay at zero utilization.
+- **Multi-node Alignment**: Display all nodes on a shared timeline, letting you compare execution phases across the cluster.
+- **Manual/Auto Ranges**: Pick between automatic min/max scaling or the ranges defined in the configuration with `--manual-range`.
 
-## Features Overview
+### Paraver Trace Export
+- **Complete Metric Export**: Convert loop/app CSV data to a Paraver-compatible trace containing every metric present in the input.
+- **Workflow-Friendly**: Include multiple steps/apps of a job in a single trace; only `--job-id` is required for this format.
+- **Node/GPU Mapping**: Map node metrics to Paraver tasks and GPU metrics to thread lanes so they are ready for Paraver configs shipped under `examples/`.
 
-### Loop and Application Signatures
-- **Loop Signatures**: Generate visualizations for loop-level performance metrics.
-- **Application Signatures**: Create application-level performance signatures for detailed analysis.
-- **Multi-column Support**
-- **Multiple Node support**: Visualize data from multiple nodes in a single image.
-
-### List of metrics
-- **Obtain a list of currently supported metrics**: Use the `--avail-metrics` option to see all available metrics for visualization.
-  - LIST HERE
+### Metric Discovery
+- **Discover Available Metrics**: Run `--avail-metrics` (optionally with `-c custom_config.json`) to list every metric name that can be used in `-m`.
 
 ### Output Formats
-- **Image Outputs**: Save visualizations as PNG, PDF, or other image formats.
-- **Paraver Trace Generation**: Export runtime traces for further analysis in external tools. A BIT OF RELATED FEATURES HERE (configuration of paraver, etc.) 
+- **Image Outputs**: Save figures as PNG/PDF (default names `runtime_<metric>[ -<suffix>]` or inside the directory passed to `-o`).
+- **Paraver Trace Generation**: Emit `.prv/.pcf/.row` files when `--format ear2prv`, ready for Paraver or other BSC Tools.
 
 ### Configuration Options
-- **Print configuration**: Use the `--print-config` option to display the current configuration settings.
-- **Customizable Configuration**: Adjust visualization parameters such as color schemes, time ranges, metrics thresholds, and titles.
+- **Inspect Configuration**: `--print-config` dumps the active JSON configuration.
+- **Custom Configuration**: `-c/--config-file` lets you change palettes, metric ranges, column mappings, etc.
 
 ---
 
@@ -26,31 +26,31 @@
 
 ### `ear-job-visualizer`
 - **`-h, --help`**: Show help message and exit.
-- **`--version`**: Show program's version number and exit.
+- **`--version`**: Show program’s version number and exit.
 
 ---
 
 ### Main Options
-- **`-c, --config-file CONFIG_FILE`**: Specify a custom configuration file.
-- **`--format {runtime,ear2prv}`**: Build results according to the chosen format:
-  - `runtime`: Generate static images.
-  - `ear2prv`: Generate Paraver-compatible trace files.
-- **`--print-config`**: Print the used configuration file.
-- **`--avail-metrics`**: Print the available metrics provided by the configuration file.
+- **`-c, --config-file CONFIG_FILE`**: Use a custom configuration JSON.
+- **`--format {runtime,ear2prv}`**: Choose between static figures (`runtime`) and Paraver traces (`ear2prv`).
+- **`--print-config`**: Print the configuration file and exit.
+- **`--avail-metrics`**: List metrics defined in the configuration.
+
+`--job-id` is required whenever `--format` is used; `--step-id` and `-m/--metrics` are required only for `runtime`.
 
 ---
 
 ### Format Common Options
-- **`--loops-file LOOPS_FILE`**: Specify the loop input file(s) to read data from.
-- **`--apps-file APPS_FILE`**: Specify the app input file(s) to read data from.
-- **`-j, --job-id JOB_ID`**: Filter the data by the Job ID.
-- **`-s, --step-id STEP_ID`**: Filter the data by the Step ID.
-- **`-o, --output OUTPUT`**: Set the output file name or directory.
-- **`-k, --keep-csv`**: Keep temporary CSV files.
+- **`--loops-file LOOPS_FILE`**: Optional; read loop CSVs/dirs instead of letting the tool call `eacct -r`. Must be paired with `--apps-file`.
+- **`--apps-file APPS_FILE`**: Optional; read app CSVs/dirs instead of `eacct -l`. Must be paired with `--loops-file`.
+- **`-j, --job-id JOB_ID`**: Select the job to visualize (mandatory with `--format`).
+- **`-s, --step-id STEP_ID`**: Filter by step; mandatory for `runtime`, optional for `ear2prv`.
+- **`-o, --output OUTPUT`**: Output file/directory base name (figures or Paraver trace prefix).
+- **`-k, --keep-csv`**: Keep the temporary CSV files when data was fetched through `eacct`.
 
 ---
 
 ### `runtime` Format Options
-- **`-t, --title TITLE`**: Set the resulting figure title.
-- **`-r, --manual-range`**: Use the range of values specified in the configuration file for the colormap.
-- **`-m, --metrics metric [metric ...]`**: Space-separated list
+- **`-t, --title TITLE`**: Prefix each figure title with `<title>:`.
+- **`-r, --manual-range`**: Use the metric ranges defined in the config (instead of auto-scaling).
+- **`-m, --metrics metric [metric ...]`**: Space-separated metric names (see `--avail-metrics`).
