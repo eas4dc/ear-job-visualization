@@ -1,4 +1,4 @@
-name: Release public EAR Tool [template]
+name: Release ear-job-visualization
 
 on:
   push:

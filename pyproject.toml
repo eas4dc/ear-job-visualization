@@ -22,8 +22,8 @@ dependencies = [
     "pandas[performance,plot,output-formatting]",
     "importlib_resources",
 	"rich",
-    "ear_analytics_core @ git+https://github.com/eas4dc/ear_analytics_core@v5",
+    "ear_analytics_core >=5.0.0 <6.0.0",
 ]
 
 [project.scripts]
-ear-job-visualizer = "ear_job_visualize.ear_job_viz:main"
+ear-job-visualizer = "ear_job_visualization.ear_job_viz:main"
