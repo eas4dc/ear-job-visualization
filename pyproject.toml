@@ -17,7 +17,7 @@ license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
-version = "5.2.2"
+version = "5.2.3"
 dependencies = [
     "pandas[performance,plot,output-formatting]",
     "importlib_resources",
