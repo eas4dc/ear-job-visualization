@@ -25,5 +25,14 @@ dependencies = [
     "ear_analytics_core >=5.0.0, <6.0.0",
 ]
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ear_job_visualization = ["config.json"]
+
 [project.scripts]
 ear-job-visualizer = "ear_job_visualization.ear_job_viz:main"
