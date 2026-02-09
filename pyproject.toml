@@ -17,13 +17,22 @@ license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
-version = "5.2.2"
+version = "5.2.3"
 dependencies = [
     "pandas[performance,plot,output-formatting]",
     "importlib_resources",
 	"rich",
     "ear_analytics_core >=5.0.0, <6.0.0",
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ear_job_visualization = ["config.json"]
 
 [project.scripts]
 ear-job-visualizer = "ear_job_visualization.ear_job_viz:main"
