@@ -218,8 +218,8 @@
 			"job_id" : "JOBID",
 			"step_id" : "STEPID",
 			"app_id" : "APPID",
-			"start_time" : "START_TIME",
-			"end_time" : "END_TIME",
+			"start_time" : "JOB_START_TIME",
+			"end_time" : "JOB_END_TIME",
 			"node_name" : "NODENAME"
 		},
 		"gpu_data" : {

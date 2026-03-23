@@ -13,6 +13,7 @@
     information given by EARL. """
 
 import sys
+import math
 from argparse import HelpFormatter, ArgumentParser
 from os import path, system, remove
 import subprocess
@@ -38,6 +39,24 @@ from ear_analytics_core import ear_data as edata
 from ear_analytics_core import runtime
 from ear_analytics_core import paraver
 from ear_analytics_core import io_api
+
+
+def _nice_step(v_min, v_max, n=10):
+    """Return a 'nice' step yielding ~n intervals between v_min and v_max."""
+    if v_max <= v_min:
+        return 1
+    raw = (v_max - v_min) / n
+    magnitude = 10 ** math.floor(math.log10(raw))
+    normalized = raw / magnitude
+    if normalized < 1.5:
+        nice = 1
+    elif normalized < 3.5:
+        nice = 2
+    elif normalized < 7.5:
+        nice = 5
+    else:
+        nice = 10
+    return nice * magnitude
 
 
 def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
@@ -111,7 +130,6 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
 
         metric_name = metric_config['column_name']
         dsply_nm = metric_config.get('display_name', metric_name)
-        step = metric_config['step']
 
         # Set the configured normalization if requested.
         v_min = None
@@ -121,6 +139,13 @@ def static_figures(loops_fn, out_jobs_fn, req_metrics, config_fn,
             print(f"Configured metric range: {metric_range}")
             v_min = metric_range[0]
             v_max = metric_range[1]
+            step = metric_config['step']
+        else:
+            cols = df.filter(regex=metric_name).columns
+            data_min = df[cols].min().min()
+            data_max = df[cols].max().max()
+            step = _nice_step(data_min, data_max, n=10)
+            print(f"Auto step for {metric}: {step} ({data_min:.4g} – {data_max:.4g})")
 
         # TODO: Add the min/max value of the metric (relative range always)
         fig_title = metric
