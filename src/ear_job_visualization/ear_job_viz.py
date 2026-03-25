@@ -552,7 +552,7 @@ def ear2prv(job_data_fn, loop_data_fn, events_config, config_fn,
                                       'dcgm_nvlink_rx_bytes',
                                       'dcgm_pcie_tx_bytes',
                                       'dcgm_pcie_rx_bytes', 'TIMESTAMP',
-                                      'START_TIME', 'END_TIME']
+                                      'JOB_START_TIME', 'JOB_END_TIME']
                              ).columns
                )
 
