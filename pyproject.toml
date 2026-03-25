@@ -19,11 +19,21 @@ classifiers = [
 ]
 version = "6.0.0"
 dependencies = [
-    "pandas[performance,plot,output-formatting]",
+    "pandas",
     "importlib_resources",
 	"rich",
-    "ear_analytics_core @ git+https://github.com/eas4dc/ear_analytics_core@v6"
+    "ear_analytics_core >=6.0.0, <7.0.0",
 ]
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ear_job_visualization = ["config.json"]
+
 [project.scripts]
-ear-job-visualizer = "ear_job_visualize.ear_job_viz:main"
+ear-job-visualizer = "ear_job_visualization.ear_job_viz:main"
+ear-normalize-csv  = "ear_job_visualization.ear_normalize_csv:main"
