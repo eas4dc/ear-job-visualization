@@ -69,17 +69,30 @@ On shared HPC systems, you can install the tool to a shared location and expose 
 2. Prepend `<prefix>/lib/python<version>/site-packages` to `PYTHONPATH`.
 3. Prepend `<prefix>/bin` to `PATH`.
 
-The script `create_module.py` included in this repository can generate a module file for you. Below is an example for Lmod:
+The script `create_module.py` included in this repository generates an Lmod modulefile automatically. Pass `--prefix` with the installation prefix (e.g., your virtual environment root); the version is read from the installed package metadata by default:
 
-```lua
-whatis("Enables the usage of ear-job-visualizer, a tool for visualizing performance metrics collected by EAR.")
-
--- depends_on("")
-prepend_path("PYTHONPATH", "virtualenv/install/dir/lib/python<version>/site-packages")
-prepend_path("PATH", "virtualenv/install/dir/bin")
+```bash
+python create_module.py --prefix /path/to/venv
 ```
 
-Save this file (e.g., as `eas-tools.lua`) under `EAR/installation/path/etc/module` and load it with `module load eas-tools`.
+The script writes the modulefile to `ear-job-visualizer/<version>.lua` by default. You can override the output path with `--output`, and the Python version with `--python-version` if needed. The generated file looks like:
+
+```lua
+-- -*- lua -*-
+-- Lmod modulefile for ear-job-visualizer <version>
+
+whatis("Name:        ear-job-visualizer")
+whatis("Version:     <version>")
+whatis("Description: Visualisation tool for performance metrics collected by EAR.")
+
+local prefix      = "/path/to/venv"
+local python_ver  = "<python-version>"
+
+prepend_path("PATH",       pathJoin(prefix, "bin"))
+prepend_path("PYTHONPATH", pathJoin(prefix, "lib", "python" .. python_ver, "site-packages"))
+```
+
+Place the generated file in a directory on your module path and load it with `module load ear-job-visualizer`.
 
 ## EAR version compatibility
 
@@ -227,7 +240,11 @@ The above command generates the following figures:
 
 ![An example of GPU power consumption of a single node application using just one GPU device.](/examples/runtime_format/runtime_gpu_power-69478.0.png)
 
-Starting from EAR 6.0, signature files include extended GPU profiling metrics from the NVIDIA® Data Center GPU Manager ([DCGM](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics)) and the NVIDIA Management Library ([NVML](https://developer.nvidia.com/management-library-nvml)) GPM interface. These are available in the default configuration and include SM activity, tensor/FP64/FP32/FP16 engine activity, memory bandwidth utilization, NVLink and PCIe bandwidth, and more. Run `--avail-metrics` to see the full list.
+Starting from EAR 6.0, signature files can include extended GPU profiling metrics from the NVIDIA® Data Center GPU Manager ([DCGM](https://docs.nvidia.com/datacenter/dcgm/latest/user-guide/feature-overview.html#profiling-metrics)) and the NVIDIA Management Library ([NVML](https://developer.nvidia.com/management-library-nvml)) GPM interface, including SM activity, tensor/FP64/FP32/FP16 engine activity, memory bandwidth utilization, NVLink and PCIe bandwidth, and more.
+
+> **Note:** DCGM metrics are **not collected by default**. They must be explicitly enabled via EAR environment variables before submitting your job. See the [Extended GPU metrics](https://github.com/eas4dc/EAR/wiki/EAR-environment-variables#extended-gpu-metrics) section of the EAR documentation for details.
+
+These metrics are available in the default tool configuration once collected. Run `--avail-metrics` to see the full list.
 
 #### Colormap range
 
