@@ -38,29 +38,29 @@ def normalize_loops(df: pd.DataFrame) -> pd.DataFrame:
 
 def _add_job_start_end_times(df: pd.DataFrame, df_loops: pd.DataFrame) -> pd.DataFrame:
     """
-    Derive JOB_START_TIME and JOB_END_TIME (Unix timestamps) from the loops
+    Derive JOB_EARL_START_TIME and JOB_EARL_END_TIME (Unix timestamps) from the loops
     TIMESTAMP and ELAPSED columns and merge them into the apps DataFrame.
 
-    JOB_START_TIME = first_TIMESTAMP - first_ELAPSED
+    JOB_EARL_START_TIME = first_TIMESTAMP - first_ELAPSED
         Places the window start before the first measurement, matching the
         convention used by the new EAR format.  This is required for the
         library's bfill() call to fill the full time range: with the data
         point at the end of the window, bfill fills every earlier timestamp.
 
-    JOB_END_TIME = last_TIMESTAMP
+    JOB_EARL_END_TIME = last_TIMESTAMP
         Ends the window at the last recorded measurement.  Extending by
         ELAPSED would add trailing NaN rows that bfill cannot fill.
     """
     grp = df_loops.sort_values('TIMESTAMP').groupby(['JOBID', 'STEPID', 'NODENAME'])
     timing = pd.concat([
-        (grp['TIMESTAMP'].first() - grp['ELAPSED'].first()).rename('JOB_START_TIME'),
-        grp['TIMESTAMP'].last().rename('JOB_END_TIME'),
+        (grp['TIMESTAMP'].first() - grp['ELAPSED'].first()).rename('JOB_EARL_START_TIME'),
+        grp['TIMESTAMP'].last().rename('JOB_EARL_END_TIME'),
     ], axis=1).reset_index()
     return df.merge(timing, on=['JOBID', 'STEPID', 'NODENAME'], how='left')
 
 
 def normalize_apps(df: pd.DataFrame, df_loops: pd.DataFrame) -> pd.DataFrame:
-    """Rename columns, add APPID and derive JOB_START/END_TIME."""
+    """Rename columns, add APPID and derive JOB_EARL_START/END_TIME."""
     df = df.rename(columns=_APPS_RENAME).pipe(_add_job_start_end_times, df_loops)
     df.insert(df.columns.get_loc('STEPID') + 1, 'APPID', 1)
     return df
