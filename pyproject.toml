@@ -17,12 +17,12 @@ license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
     "pandas",
     "importlib_resources",
 	"rich",
-    "ear_analytics_core >=6.0.0, <7.0.0",
+    "ear_analytics_core >= 7.0.0, < 8.0.0",
 ]
 
 [tool.setuptools]

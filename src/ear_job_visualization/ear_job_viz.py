@@ -26,6 +26,7 @@ import pandas as pd
 import heapq
 
 from importlib_resources import files
+from importlib.metadata import version as pkg_version
 
 from itertools import chain
 
@@ -950,7 +951,7 @@ def build_parser():
                             visualizing EAR job data.''',
                             formatter_class=formatter,
                             epilog='Contact: support@eas4dc.com')
-    parser.add_argument('--version', action='version', version='%(prog)s 6.0')
+    parser.add_argument('--version', action='version', version=f"%(prog)s {pkg_version('ear-job-visualization')}")
 
     main_group = parser.add_argument_group('Main options',
                                            description='''The main option flags

@@ -1,6 +1,7 @@
 """
-Normalize old-format EAR CSV files (pre-EAR6, missing APPID) to the format
-expected by the current version of ear_analytics_core / ear-job-visualizer.
+Normalize old-format EAR CSV files (pre-EAR6, missing APPID, or EAR6, missing
+JOB_EARL_START/END_TIME) to the format expected by the current version of
+ear_analytics_core / ear-job-visualizer.
 
 Installed as the ``ear-normalize-csv`` command.
 """
@@ -19,6 +20,10 @@ _APPS_RENAME = {
     'USER_ACC':   'ACCOUNTID',
     'CPU-GFLOPS': 'CPU_GFLOPS',
     'DP_256':     'DPOPS_256',
+    'START_TIME': 'JOB_START_TIME',
+    'END_TIME':   'JOB_END_TIME',
+    'START_DATE': 'JOB_START_DATE',
+    'END_DATE':   'JOB_END_DATE',
 }
 
 
@@ -28,6 +33,10 @@ _APPS_RENAME = {
 
 def _is_old_format(df: pd.DataFrame) -> bool:
     return 'APPID' not in df.columns
+
+
+def _is_old_apps_format(df: pd.DataFrame) -> bool:
+    return _is_old_format(df) or 'JOB_EARL_START_TIME' not in df.columns
 
 
 def normalize_loops(df: pd.DataFrame) -> pd.DataFrame:
@@ -51,18 +60,22 @@ def _add_job_start_end_times(df: pd.DataFrame, df_loops: pd.DataFrame) -> pd.Dat
         Ends the window at the last recorded measurement.  Extending by
         ELAPSED would add trailing NaN rows that bfill cannot fill.
     """
-    grp = df_loops.sort_values('TIMESTAMP').groupby(['JOBID', 'STEPID', 'NODENAME'])
+    key = ['JOBID', 'STEPID', 'APPID', 'NODENAME']
+    grp = df_loops.sort_values('TIMESTAMP').groupby(key)
     timing = pd.concat([
         (grp['TIMESTAMP'].first() - grp['ELAPSED'].first()).rename('JOB_EARL_START_TIME'),
         grp['TIMESTAMP'].last().rename('JOB_EARL_END_TIME'),
     ], axis=1).reset_index()
-    return df.merge(timing, on=['JOBID', 'STEPID', 'NODENAME'], how='left')
+    return df.merge(timing, on=key, how='left')
 
 
 def normalize_apps(df: pd.DataFrame, df_loops: pd.DataFrame) -> pd.DataFrame:
     """Rename columns, add APPID and derive JOB_EARL_START/END_TIME."""
-    df = df.rename(columns=_APPS_RENAME).pipe(_add_job_start_end_times, df_loops)
-    df.insert(df.columns.get_loc('STEPID') + 1, 'APPID', 1)
+    if _is_old_format(df):
+        df.insert(df.columns.get_loc('STEPID') + 1, 'APPID', 1)
+    df = df.rename(columns=_APPS_RENAME)
+    if 'JOB_EARL_START_TIME' not in df.columns:
+        df = df.pipe(_add_job_start_end_times, df_loops)
     return df
 
 
@@ -84,7 +97,7 @@ def main() -> None:
     df_loops = pd.read_csv(args.loops_file, sep=';')
     df_apps  = pd.read_csv(args.apps_file,  sep=';')
 
-    if not _is_old_format(df_loops) and not _is_old_format(df_apps):
+    if not _is_old_format(df_loops) and not _is_old_apps_format(df_apps):
         print('Both files are already in new format — nothing to do.', file=sys.stderr)
         sys.exit(0)
 
@@ -103,7 +116,7 @@ def main() -> None:
     else:
         print('[normalize] loops already in new format, copying unchanged.', file=sys.stderr)
 
-    if _is_old_format(df_apps):
+    if _is_old_apps_format(df_apps):
         df_apps = normalize_apps(df_apps, df_loops)
         print(f'[normalize] apps  → {out_apps}', file=sys.stderr)
     else:
