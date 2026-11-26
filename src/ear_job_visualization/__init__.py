@@ -7,3 +7,7 @@
 #
 # SPDX-License-Identifier: EPL-2.0
 #######################################################################
+
+from .ear_job_viz import main  # entry point: console script and bin/ear-job-visualizer
+
+__all__ = ["main"]
