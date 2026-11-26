@@ -17,7 +17,7 @@ license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
 ]
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
     "pandas",
     "importlib_resources",
@@ -35,5 +35,5 @@ where = ["src"]
 ear_job_visualization = ["config.json"]
 
 [project.scripts]
-ear-job-visualizer = "ear_job_visualization.ear_job_viz:main"
+ear-job-visualizer = "ear_job_visualization:main"
 ear-normalize-csv  = "ear_job_visualization.ear_normalize_csv:main"

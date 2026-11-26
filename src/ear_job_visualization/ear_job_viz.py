@@ -947,7 +947,8 @@ def build_parser():
     def formatter(prog):
         return CustomHelpFormatter(prog)
 
-    parser = ArgumentParser(description='''High level support for
+    parser = ArgumentParser(prog='ear-job-visualizer',
+                            description='''High level support for
                             visualizing EAR job data.''',
                             formatter_class=formatter,
                             epilog='Contact: support@eas4dc.com')
@@ -1038,16 +1039,16 @@ def build_parser():
     return parser
 
 
-def main():
+def main(argv=None):
     """ Entry method. """
 
     parser = build_parser()
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     parser_action(args)
 
-    sys.exit()
+    return 0
 
 
 if __name__ == '__main__':
